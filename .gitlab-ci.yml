@@ -1,0 +1,55 @@
+# imagen a ulilizar para los pasos
+image: maven:3.9.6-eclipse-temurin-21
+
+# cache
+variables:
+  MAVEN_OPTS: "-Dmaven.repo.local=.m2/repository"
+
+cache:
+  paths:
+    - .m2/repository
+
+# etapas
+stages:
+  - build
+  - test
+  - deploy
+
+
+# etapa build
+device_build:
+  stage: build
+  script:
+    - echo "Compilando Device Service..."
+    - cd device-service
+    - mvn clean package -DskipTests
+  rules:
+    - changes:
+        - device-service/**/* 
+
+# etapa test
+device_test:
+  stage: test
+  needs: ["device_build"]
+  script:
+    - echo "🧪 Corriendo tests..."
+    - cd device-service
+    - mvn test
+  rules:
+    - changes:
+        - device-service/**/*
+
+# etapa deploy (ahora simulado)
+device_deploy:
+  stage: deploy
+  needs: ["device_test"]
+  script:
+    - echo "Iniciando despliegue a Producción (Simulado)..."
+    - echo "Conectando a servidor..."
+    - echo "Copiando .jar..."
+    - echo "Despliegue exitoso!"
+  rules:
+    # ejecuta solo si es la rama main
+    - if: $CI_COMMIT_BRANCH == "main"
+      changes:
+        - device-service/**/*
