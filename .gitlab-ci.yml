@@ -7,25 +7,15 @@ cache:
   paths:
     - .m2/repository
 
+
 stages:
-  - build
   - test
+  - build
   - deploy
 
 
-device_build:
-  stage: build
-  script:
-    - echo "🏗️ Compilando Device Service..."
-    - cd device-service
-    - mvn clean package -DskipTests
-  rules:
-    - changes:
-        - device-service/**/*
-
 device_test:
   stage: test
-  needs: ["device_build"]
   services:
     - name: postgres:15-alpine
       alias: postgres
@@ -40,9 +30,26 @@ device_test:
     - changes:
         - device-service/**/*
 
+device_build:
+  stage: build
+  needs: ["device_test"]
+  image: docker:24.0.5
+  services:
+    - name: docker:24.0.5-dind
+      alias: docker
+  variables:
+    DOCKER_HOST: tcp://docker:2375
+    DOCKER_TLS_CERTDIR: ""
+  script:
+    - cd device-service
+    - docker build -t bidcast/device-service .
+  rules:
+    - changes:
+        - device-service/**/*
+
 device_deploy:
   stage: deploy
-  needs: ["device_test"]
+  needs: ["device_build"]
   script:
     - echo "🚀 Desplegando Device Service (Simulado)..."
   rules:
@@ -51,19 +58,8 @@ device_deploy:
         - device-service/**/*
 
 
-user_build:
-  stage: build
-  script:
-    - echo "🏗️ Compilando User Service..."
-    - cd user-service
-    - mvn clean package -DskipTests
-  rules:
-    - changes:
-        - user-service/**/*
-
 user_test:
   stage: test
-  needs: ["user_build"]
   services:
     - name: docker:24.0.5-dind 
       alias: docker
@@ -78,12 +74,73 @@ user_test:
     - changes:
         - user-service/**/*
 
+user_build:
+  stage: build
+  needs: ["user_test"]
+  image: docker:24.0.5
+  services:
+    - name: docker:24.0.5-dind
+      alias: docker
+  variables:
+    DOCKER_HOST: tcp://docker:2375
+    DOCKER_TLS_CERTDIR: ""
+  script:
+    - cd user-service
+    - docker build -t bidcast/user-service .
+  rules:
+    - changes:
+        - user-service/**/*
+
 user_deploy:
   stage: deploy
-  needs: ["user_test"]
+  needs: ["user_build"]
   script:
     - echo "🚀 Desplegando User Service (Simulado)..."
   rules:
     - if: $CI_COMMIT_BRANCH == "main"
       changes:
         - user-service/**/*
+
+
+ad_test:
+  stage: test
+  services:
+    - name: postgres:15-alpine
+      alias: postgres
+  variables:
+    POSTGRES_PASSWORD: postgres
+    SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/ads_db
+  script:
+    - echo "🧪 Corriendo tests Advertisement..."
+    - cd advertisement-service
+    - mvn test
+  rules:
+    - changes:
+        - advertisement-service/**/*
+
+ad_build:
+  stage: build
+  needs: ["ad_test"]
+  image: docker:24.0.5
+  services:
+    - name: docker:24.0.5-dind
+      alias: docker
+  variables:
+    DOCKER_HOST: tcp://docker:2375
+    DOCKER_TLS_CERTDIR: ""
+  script:
+    - cd advertisement-service
+    - docker build -t bidcast/advertisement-service .
+  rules:
+    - changes:
+        - advertisement-service/**/*
+        
+ad_deploy:
+  stage: deploy
+  needs: ["ad_build"]
+  script:
+    - echo "🚀 Desplegando Advertisement Service (Simulado)..."
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+      changes:
+        - advertisement-service/**/*
