@@ -37,5 +37,17 @@ services:
     depends_on:
       - postgres
 
+  advertisement-service:
+    build: ./advertisement-service
+    container_name: advertisement-service
+    ports:
+      - "8082:8082" 
+    environment:
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/adv_db
+      - SPRING_DATASOURCE_USERNAME=postgres
+      - SPRING_DATASOURCE_PASSWORD=postgres
+    depends_on:
+      - postgres
+
 volumes:
   bidcast_data: 
