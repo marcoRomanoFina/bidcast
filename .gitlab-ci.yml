@@ -1,7 +1,5 @@
-# imagen a ulilizar para los pasos
 image: maven:3.9.6-eclipse-temurin-21
 
-# cache
 variables:
   MAVEN_OPTS: "-Dmaven.repo.local=.m2/repository"
 
@@ -9,47 +7,83 @@ cache:
   paths:
     - .m2/repository
 
-# etapas
 stages:
   - build
   - test
   - deploy
 
 
-# etapa build
 device_build:
   stage: build
   script:
-    - echo "Compilando Device Service..."
+    - echo "🏗️ Compilando Device Service..."
     - cd device-service
     - mvn clean package -DskipTests
   rules:
     - changes:
-        - device-service/**/* 
+        - device-service/**/*
 
-# etapa test
 device_test:
   stage: test
   needs: ["device_build"]
+  services:
+    - name: postgres:15-alpine
+      alias: postgres
+  variables:
+    POSTGRES_PASSWORD: postgres
+    SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/devices_db
   script:
-    - echo "🧪 Corriendo tests..."
+    - echo "🧪 Corriendo tests Device..."
     - cd device-service
     - mvn test
   rules:
     - changes:
         - device-service/**/*
 
-# etapa deploy (ahora simulado)
 device_deploy:
   stage: deploy
   needs: ["device_test"]
   script:
-    - echo "Iniciando despliegue a Producción (Simulado)..."
-    - echo "Conectando a servidor..."
-    - echo "Copiando .jar..."
-    - echo "Despliegue exitoso!"
+    - echo "🚀 Desplegando Device Service (Simulado)..."
   rules:
-    # ejecuta solo si es la rama main
     - if: $CI_COMMIT_BRANCH == "main"
       changes:
         - device-service/**/*
+
+
+user_build:
+  stage: build
+  script:
+    - echo "🏗️ Compilando User Service..."
+    - cd user-service
+    - mvn clean package -DskipTests
+  rules:
+    - changes:
+        - user-service/**/*
+
+user_test:
+  stage: test
+  needs: ["user_build"]
+  services:
+    - name: docker:24.0.5-dind 
+      alias: docker
+  variables:
+    DOCKER_HOST: tcp://docker:2375 
+    DOCKER_TLS_CERTDIR: "" 
+  script:
+    - echo "🧪 Corriendo tests User con Testcontainers..."
+    - cd user-service
+    - mvn test
+  rules:
+    - changes:
+        - user-service/**/*
+
+user_deploy:
+  stage: deploy
+  needs: ["user_test"]
+  script:
+    - echo "🚀 Desplegando User Service (Simulado)..."
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+      changes:
+        - user-service/**/*
