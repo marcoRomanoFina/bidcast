@@ -105,18 +105,19 @@ user_deploy:
 ad_test:
   stage: test
   services:
-    - name: postgres:15-alpine
-      alias: postgres
+    - name: docker:24.0.5-dind 
+      alias: docker
   variables:
-    POSTGRES_PASSWORD: postgres
-    SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/ads_db
+    DOCKER_HOST: tcp://docker:2375 
+    DOCKER_TLS_CERTDIR: ""
   script:
-    - echo "🧪 Corriendo tests Advertisement..."
+    - echo "🧪 Corriendo tests Advertisement con Testcontainers..."
     - cd advertisement-service
-    - mvn test
+    - mvn test 
   rules:
     - changes:
         - advertisement-service/**/*
+
 
 ad_build:
   stage: build
