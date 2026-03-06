@@ -6,7 +6,7 @@ import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -42,11 +42,9 @@ public class Campaign {
     @Column(nullable = false, precision = 12, scale = 4)
     private BigDecimal bidCpm;
 
-    @Column(nullable = false)
-    private LocalDateTime startDate;
+    private Instant startDate;
 
-    @Column(nullable = false)
-    private LocalDateTime endDate;
+    private Instant endDate;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
@@ -58,8 +56,8 @@ public class Campaign {
 
     @CreationTimestamp
     @Column(updatable = false)
-    private LocalDateTime createdAt;
+    private Instant createdAt;
 
     @UpdateTimestamp
-    private LocalDateTime updatedAt;
+    private Instant updatedAt;
 }

@@ -2,6 +2,9 @@ package com.bidcast.advertisement_service.campaign;
 
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+
+import java.util.UUID;
+
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -17,8 +20,8 @@ public class CampaignController {
 
     
     @PostMapping
-    public ResponseEntity<Campaign> create(@Valid @RequestBody CampaignRequest body) {
-        Campaign savedCampaign = campaignService.createCampaign(body);
+    public ResponseEntity<Campaign> create(@Valid @RequestBody CampaignRequest body, @RequestHeader("X-Advertiser-Id") UUID advertiserId) {
+        Campaign savedCampaign = campaignService.createCampaign(advertiserId,body);
         return new ResponseEntity<>(savedCampaign, HttpStatus.CREATED);
     }
 }
