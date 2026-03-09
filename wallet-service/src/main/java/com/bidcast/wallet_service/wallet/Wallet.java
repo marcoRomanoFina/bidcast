@@ -23,15 +23,9 @@ import java.time.Instant;
 import java.util.UUID;
 
 @Entity
-@Table(
-        name = "wallets",
-        uniqueConstraints = {
-                @UniqueConstraint(
-                        name = "uk_wallet_owner",
-                        columnNames = {"owner_id", "owner_type"}
-                )
-        }
-)
+@Table(name = "wallets", uniqueConstraints = {
+        @UniqueConstraint(name = "uk_wallet_owner", columnNames = { "owner_id", "owner_type" })
+})
 @Getter
 @Setter
 @NoArgsConstructor
@@ -86,4 +80,3 @@ public class Wallet {
         balance = balance.add(amount);
     }
 }
-
