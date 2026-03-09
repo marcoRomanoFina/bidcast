@@ -145,3 +145,46 @@ ad_deploy:
     - if: $CI_COMMIT_BRANCH == "main"
       changes:
         - advertisement-service/**/*
+
+wallet_test:
+  stage: test
+  services:
+    - name: docker:24.0.5-dind 
+      alias: docker
+  variables:
+    DOCKER_HOST: tcp://docker:2375 
+    DOCKER_TLS_CERTDIR: ""
+  script:
+    - echo "🧪 Corriendo tests Wallet con Testcontainers..."
+    - cd wallet-service
+    - mvn test 
+  rules:
+    - changes:
+        - wallet-service/**/*
+
+wallet_build:
+  stage: build
+  needs: ["wallet_test"]
+  image: docker:24.0.5
+  services:
+    - name: docker:24.0.5-dind
+      alias: docker
+  variables:
+    DOCKER_HOST: tcp://docker:2375
+    DOCKER_TLS_CERTDIR: ""
+  script:
+    - cd wallet-service
+    - docker build -t bidcast/wallet-service .
+  rules:
+    - changes:
+        - wallet-service/**/*
+        
+wallet_deploy:
+  stage: deploy
+  needs: ["wallet_build"]
+  script:
+    - echo "🚀 Desplegando Wallet Service (Simulado)..."
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+      changes:
+        - wallet-service/**/*
