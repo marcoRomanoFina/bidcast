@@ -49,5 +49,17 @@ services:
     depends_on:
       - postgres
 
+  wallet-service:
+    build: ./wallet-service
+    container_name: wallet-service
+    ports:
+      - "8083:8083"
+    environment:
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/wallet_db
+      - SPRING_DATASOURCE_USERNAME=postgres
+      - SPRING_DATASOURCE_PASSWORD=postgres
+    depends_on:
+      - postgres
+
 volumes:
   bidcast_data: 

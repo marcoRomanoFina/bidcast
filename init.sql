@@ -1,3 +1,4 @@
 CREATE DATABASE devices_db;
 CREATE DATABASE users_db;
 CREATE DATABASE adv_db;
+CREATE DATABASE wallet_db;
