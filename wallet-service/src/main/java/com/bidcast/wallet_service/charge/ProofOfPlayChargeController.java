@@ -24,8 +24,6 @@ public class ProofOfPlayChargeController {
 
         settlementService.processProofOfPlayCharge(command);
 
-        // Si el PoP ya estaba cobrado, el servicio retorna silenciosamente (idempotencia),
-        // y aquí seguimos devolviendo 201 para que el caller lo trate como éxito.
         return ResponseEntity.status(HttpStatus.CREATED).build();
     }
 }

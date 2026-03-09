@@ -1,5 +1,6 @@
 package com.bidcast.wallet_service.wallet;
 
+import com.bidcast.wallet_service.core.exception.InsufficientWalletBalanceException;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -68,7 +69,7 @@ public class Wallet {
             throw new IllegalArgumentException("El monto a debitar debe ser positivo");
         }
         if (balance.compareTo(amount) < 0) {
-            throw new IllegalStateException("Saldo insuficiente en la billetera");
+            throw new InsufficientWalletBalanceException(id);
         }
         balance = balance.subtract(amount);
     }

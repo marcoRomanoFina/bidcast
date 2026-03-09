@@ -1,5 +1,6 @@
 package com.bidcast.wallet_service.charge;
 
+import com.bidcast.wallet_service.core.exception.InvalidProofOfPlayChargeException;
 import com.bidcast.wallet_service.transaction.WalletTransaction;
 import com.bidcast.wallet_service.transaction.WalletTransactionRepository;
 import com.bidcast.wallet_service.wallet.Wallet;
@@ -7,7 +8,6 @@ import com.bidcast.wallet_service.wallet.WalletRepository;
 import com.bidcast.wallet_service.wallet.WalletOwnerType;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.retry.annotation.Retryable;
 import org.springframework.retry.annotation.Backoff;
@@ -33,9 +33,15 @@ public class ProofOfPlaySettlementService {
     @Transactional
     public void processProofOfPlayCharge(ProofOfPlayChargeCommand command) {
         if (!command.isSumConsistent()) {
-            throw new IllegalArgumentException(
+            throw new InvalidProofOfPlayChargeException(
                     "La suma publisherAmount + platformFeeAmount debe ser igual a grossAmount"
             );
+        }
+
+        // Idempotencia rápida: si ya existe un cargo para este proofOfPlayId, no hacemos nada.
+        if (chargeRepository.findByProofOfPlayId(command.proofOfPlayId()).isPresent()) {
+            log.info("Idempotency hit (pre-check): ProofOfPlay {} ya fue cobrado. Ignorando.", command.proofOfPlayId());
+            return;
         }
 
         ProofOfPlayCharge charge = ProofOfPlayCharge.builder()
@@ -48,16 +54,7 @@ public class ProofOfPlaySettlementService {
                 .platformWalletId(command.platformWalletId())
                 .build();
 
-        try {
-            chargeRepository.saveAndFlush(charge);
-        } catch (DataIntegrityViolationException ex) {
-            if (isDuplicateProofOfPlayId(ex)) {
-    
-                log.info("Idempotency hit: ProofOfPlay {} ya fue cobrado. Ignorando.", command.proofOfPlayId());
-                return;
-            }
-            throw ex;
-        }
+        chargeRepository.save(charge);
 
         Wallet advertiserWallet = getWalletOrThrow(command.advertiserWalletId());
         Wallet publisherWallet = getWalletOrThrow(command.publisherWalletId());
@@ -127,11 +124,4 @@ public class ProofOfPlaySettlementService {
         }
     }
 
-    private boolean isDuplicateProofOfPlayId(DataIntegrityViolationException ex) {
-        String message = ex.getMostSpecificCause() != null
-                ? ex.getMostSpecificCause().getMessage().toLowerCase()
-                : ex.getMessage().toLowerCase();
-        
-        return message.contains("duplicate key") || message.contains("proof_of_play_charges_pkey");
-    }
 }
