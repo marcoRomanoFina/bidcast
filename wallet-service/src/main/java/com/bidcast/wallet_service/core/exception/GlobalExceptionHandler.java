@@ -37,6 +37,14 @@ public class GlobalExceptionHandler {
         return ResponseEntity
                 .status(HttpStatus.CONFLICT)
                 .body(Map.of("error", ex.getMessage()));
+    
+    }
+
+    @ExceptionHandler(ConcurrentProofOfPlayException.class)
+    public ResponseEntity<Map<String, String>> handleConcurrentProofOfPlay(ConcurrentProofOfPlayException ex) {
+        return ResponseEntity
+                .status(HttpStatus.CONFLICT)
+                .body(Map.of("error", ex.getMessage()));
     }
 }
 

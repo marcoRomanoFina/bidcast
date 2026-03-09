@@ -1,5 +1,6 @@
 package com.bidcast.wallet_service.charge;
 
+import com.bidcast.wallet_service.core.exception.ConcurrentProofOfPlayException;
 import com.bidcast.wallet_service.core.exception.InvalidProofOfPlayChargeException;
 import com.bidcast.wallet_service.transaction.WalletTransaction;
 import com.bidcast.wallet_service.transaction.WalletTransactionRepository;
@@ -8,11 +9,13 @@ import com.bidcast.wallet_service.wallet.WalletRepository;
 import com.bidcast.wallet_service.wallet.WalletOwnerType;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.retry.annotation.Retryable;
 import org.springframework.retry.annotation.Backoff;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
 import java.util.List;
 import java.util.UUID;
 
@@ -25,27 +28,21 @@ public class ProofOfPlaySettlementService {
     private final WalletTransactionRepository transactionRepository;
     private final ProofOfPlayChargeRepository chargeRepository;
 
-    @Retryable(
-            retryFor = ObjectOptimisticLockingFailureException.class, 
-            maxAttempts = 3,                                          
-            backoff = @Backoff(delay = 100)                           
-    )
+    @Retryable(retryFor = ObjectOptimisticLockingFailureException.class, maxAttempts = 3, backoff = @Backoff(delay = 100))
     @Transactional
     public void processProofOfPlayCharge(ProofOfPlayChargeCommand command) {
         if (!command.isSumConsistent()) {
             throw new InvalidProofOfPlayChargeException(
-                    "La suma publisherAmount + platformFeeAmount debe ser igual a grossAmount"
-            );
+                    "La suma publisherAmount + platformFeeAmount debe ser igual a grossAmount");
         }
 
-        // Idempotencia rápida: si ya existe un cargo para este proofOfPlayId, no hacemos nada.
         if (chargeRepository.findByProofOfPlayId(command.proofOfPlayId()).isPresent()) {
             log.info("Idempotency hit (pre-check): ProofOfPlay {} ya fue cobrado. Ignorando.", command.proofOfPlayId());
             return;
         }
 
         ProofOfPlayCharge charge = ProofOfPlayCharge.builder()
-                .proofOfPlayId(command.proofOfPlayId()) 
+                .proofOfPlayId(command.proofOfPlayId())
                 .grossAmount(command.grossAmount())
                 .publisherAmount(command.publisherAmount())
                 .platformFeeAmount(command.platformFeeAmount())
@@ -54,7 +51,14 @@ public class ProofOfPlaySettlementService {
                 .platformWalletId(command.platformWalletId())
                 .build();
 
-        chargeRepository.save(charge);
+        try {
+            chargeRepository.saveAndFlush(charge);
+        } catch (DataIntegrityViolationException ex) {
+            log.warn("Idempotency hit (race condition): Colisión detectada para PoP {}.", command.proofOfPlayId());
+            throw new ConcurrentProofOfPlayException(
+                    "Colisión concurrente procesando el anuncio: " + command.proofOfPlayId(), ex
+            );
+        }
 
         Wallet advertiserWallet = getWalletOrThrow(command.advertiserWalletId());
         Wallet publisherWallet = getWalletOrThrow(command.publisherWalletId());
@@ -69,40 +73,34 @@ public class ProofOfPlaySettlementService {
         var advertiserEntry = WalletTransaction.debitForProofOfPlay(
                 advertiserWallet,
                 command.grossAmount(),
-                command.proofOfPlayId()
-        );
+                command.proofOfPlayId());
 
         var publisherEntry = WalletTransaction.creditForPublisher(
                 publisherWallet,
                 command.publisherAmount(),
-                command.proofOfPlayId()
-        );
+                command.proofOfPlayId());
 
         var platformEntry = WalletTransaction.creditForPlatform(
                 platformWallet,
                 command.platformFeeAmount(),
-                command.proofOfPlayId()
-        );
+                command.proofOfPlayId());
 
         transactionRepository.saveAll(List.of(
                 advertiserEntry,
                 publisherEntry,
-                platformEntry
-        ));
+                platformEntry));
 
         walletRepository.saveAll(List.of(
                 advertiserWallet,
                 publisherWallet,
-                platformWallet
-        ));
+                platformWallet));
 
         log.info(
                 "ProofOfPlay {} liquidado con éxito. grossAmount={}, publisherAmount={}, platformFeeAmount={}",
                 command.proofOfPlayId(),
                 command.grossAmount(),
                 command.publisherAmount(),
-                command.platformFeeAmount()
-        );
+                command.platformFeeAmount());
     }
 
     private Wallet getWalletOrThrow(UUID walletId) {
@@ -112,16 +110,14 @@ public class ProofOfPlaySettlementService {
 
     private void validateWalletRoles(Wallet advertiser, Wallet publisher, Wallet platform) {
         validateWalletRole(advertiser, WalletOwnerType.ADVERTISER, "advertiser");
-        validateWalletRole(publisher,  WalletOwnerType.PUBLISHER,  "publisher");
-        validateWalletRole(platform,   WalletOwnerType.PLATFORM,   "platform");
+        validateWalletRole(publisher, WalletOwnerType.PUBLISHER, "publisher");
+        validateWalletRole(platform, WalletOwnerType.PLATFORM, "platform");
     }
-    
+
     private void validateWalletRole(Wallet wallet, WalletOwnerType expected, String roleName) {
         if (wallet.getOwnerType() != expected) {
             throw new IllegalArgumentException(
-                    "Wallet de " + roleName + " no tiene tipo " + expected
-            );
+                    "Wallet de " + roleName + " no tiene tipo " + expected);
         }
     }
-
 }
