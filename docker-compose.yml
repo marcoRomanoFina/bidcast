@@ -61,5 +61,17 @@ services:
     depends_on:
       - postgres
 
+  auction-service:
+    build: ./auction-service
+    container_name: auction-service
+    ports:
+      - "8084:8084"
+    environment:
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/auction_db
+      - SPRING_DATASOURCE_USERNAME=postgres
+      - SPRING_DATASOURCE_PASSWORD=postgres
+    depends_on:
+      - postgres
+
 volumes:
   bidcast_data: 
