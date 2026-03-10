@@ -109,7 +109,7 @@ class ProofOfPlayChargeControllerTest {
 
         ProofOfPlayChargeCommand invalidCommand = new ProofOfPlayChargeCommand(
                 proofOfPlayId,
-                new BigDecimal("-1.0000"), // viola @DecimalMin
+                new BigDecimal("-1.0000"), 
                 new BigDecimal("0.7000"),
                 new BigDecimal("0.3000"),
                 advertiserWallet.getId(),

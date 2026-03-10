@@ -1,6 +1,7 @@
 package com.bidcast.wallet_service.charge;
 
 import com.bidcast.wallet_service.TestcontainersConfiguration;
+import com.bidcast.wallet_service.core.exception.ConcurrentProofOfPlayException;
 import com.bidcast.wallet_service.transaction.WalletTransaction;
 import com.bidcast.wallet_service.transaction.WalletTransactionRepository;
 import com.bidcast.wallet_service.transaction.WalletTransactionType;
@@ -16,6 +17,10 @@ import org.springframework.context.annotation.Import;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -146,6 +151,69 @@ class ProofOfPlaySettlementServiceIntegrationTest {
         List<WalletTransaction> transactions = transactionRepository.findAll();
         assertThat(transactions).hasSize(3);
         assertThat(chargeRepository.count()).isEqualTo(1);
+    }
+
+    @Test
+    void processProofOfPlayCharge_isIdempotentUnderStrictConcurrency() throws InterruptedException {
+        UUID proofOfPlayId = UUID.randomUUID();
+        BigDecimal gross = new BigDecimal("1.0000");
+        BigDecimal publisherAmount = new BigDecimal("0.7000");
+        BigDecimal platformFee = new BigDecimal("0.3000");
+
+        ProofOfPlayChargeCommand command = new ProofOfPlayChargeCommand(
+                proofOfPlayId, gross, publisherAmount, platformFee,
+                advertiserWallet.getId(), publisherWallet.getId(), platformWallet.getId()
+        );
+
+        int numberOfThreads = 2; // Simulamos 2 peticiones clonadas al mismo milisegundo
+        ExecutorService executor = Executors.newFixedThreadPool(numberOfThreads);
+        
+        // El 'latch' es el semáforo. Empezará en rojo (1) y cuando lo bajemos a 0, arrancan todos juntos.
+        CountDownLatch startLatch = new CountDownLatch(1);
+        CountDownLatch doneLatch = new CountDownLatch(numberOfThreads);
+
+        AtomicInteger successCount = new AtomicInteger(0);
+        AtomicInteger exceptionCount = new AtomicInteger(0);
+
+        // Preparamos los hilos
+        for (int i = 0; i < numberOfThreads; i++) {
+            executor.submit(() -> {
+                try {
+                    startLatch.await(); // 🚦 Esperan la luz verde
+                    settlementService.processProofOfPlayCharge(command);
+                    successCount.incrementAndGet(); // Si pasa limpio, suma 1
+                } catch (ConcurrentProofOfPlayException e) {
+                    exceptionCount.incrementAndGet(); // Si choca contra el constraint, suma 1
+                } catch (Exception e) {
+                    System.out.println("Error inesperado: " + e.getMessage());
+                } finally {
+                    doneLatch.countDown(); // Avisa que este hilo terminó
+                }
+            });
+        }
+
+        // 🟢 ¡LUZ VERDE! Dejamos que los dos hilos llamen al método al mismo milisegundo
+        startLatch.countDown(); 
+        
+        // 🛑 Esperamos a que los dos hilos terminen su ejecución
+        doneLatch.await(); 
+
+        // Verificamos qué pasó en la batalla
+        assertThat(successCount.get())
+                .as("Solo un hilo debería haber procesado el pago exitosamente")
+                .isEqualTo(1);
+                
+        assertThat(exceptionCount.get())
+                .as("El otro hilo debería haber chocado contra el constraint de BD")
+                .isEqualTo(1);
+
+        // Verificamos que contablemente no se haya cobrado doble
+        Wallet updatedAdvertiser = walletRepository.findById(advertiserWallet.getId()).orElseThrow();
+        assertThat(updatedAdvertiser.getBalance()).isEqualByComparingTo(new BigDecimal("99.0000"));
+        
+        // Verificamos que solo haya 1 cargo y 3 movimientos contables
+        assertThat(chargeRepository.count()).isEqualTo(1);
+        assertThat(transactionRepository.findAll()).hasSize(3);
     }
 }
 
