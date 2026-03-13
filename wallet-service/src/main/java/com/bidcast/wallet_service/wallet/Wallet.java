@@ -52,6 +52,10 @@ public class Wallet {
     @Builder.Default
     private BigDecimal balance = BigDecimal.ZERO;
 
+    @Column(name = "frozen_balance", nullable = false, precision = 12, scale = 4)
+    @Builder.Default
+    private BigDecimal frozenBalance = BigDecimal.ZERO;
+
     @Version
     @Column(name = "version", nullable = false)
     private long version;
@@ -72,6 +76,29 @@ public class Wallet {
             throw new InsufficientWalletBalanceException(id);
         }
         balance = balance.subtract(amount);
+    }
+
+    public void freeze(BigDecimal amount) {
+        if (balance.compareTo(amount) < 0) {
+            throw new InsufficientWalletBalanceException(id);
+        }
+        balance = balance.subtract(amount);
+        frozenBalance = frozenBalance.add(amount);
+    }
+
+    public void unfreeze(BigDecimal amount) {
+        if (frozenBalance.compareTo(amount) < 0) {
+            throw new IllegalArgumentException("Saldo congelado insuficiente");
+        }
+        frozenBalance = frozenBalance.subtract(amount);
+        balance = balance.add(amount);
+    }
+
+    public void settle(BigDecimal amount) {
+        if (frozenBalance.compareTo(amount) < 0) {
+            throw new IllegalArgumentException("Saldo congelado insuficiente para liquidación");
+        }
+        frozenBalance = frozenBalance.subtract(amount);
     }
 
     public void credit(BigDecimal amount) {

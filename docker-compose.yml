@@ -1,77 +1,28 @@
 services:
- 
   postgres:
-    image: postgres:15-alpine
-    container_name: bidcast-db
-    restart: always
+    image: postgres:16-alpine
+    container_name: bidcast-postgres
     environment:
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=postgres
+      POSTGRES_DB: bidcast
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
     ports:
-      - "5433:5432"
+      - "5432:5432"
     volumes:
-      - bidcast_data:/var/lib/postgresql/data
       - ./init.sql:/docker-entrypoint-initdb.d/init.sql
 
-  device-service:
-    build: ./device-service
-    container_name: device-service
+  rabbitmq:
+    image: rabbitmq:3.12-management-alpine
+    container_name: bidcast-rabbitmq
     ports:
-      - "8080:8080"
+      - "5672:5672"
+      - "15672:15672"
     environment:
-      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/devices_db
-      - SPRING_DATASOURCE_USERNAME=postgres
-      - SPRING_DATASOURCE_PASSWORD=postgres
-    depends_on:
-      - postgres
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
 
-  user-service:
-    build: ./user-service
-    container_name: user-service
+  redis:
+    image: redis:7-alpine
+    container_name: bidcast-redis
     ports:
-      - "8081:8081"
-    environment:
-      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/users_db
-      - SPRING_DATASOURCE_USERNAME=postgres
-      - SPRING_DATASOURCE_PASSWORD=postgres
-    depends_on:
-      - postgres
-
-  advertisement-service:
-    build: ./advertisement-service
-    container_name: advertisement-service
-    ports:
-      - "8082:8082" 
-    environment:
-      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/adv_db
-      - SPRING_DATASOURCE_USERNAME=postgres
-      - SPRING_DATASOURCE_PASSWORD=postgres
-    depends_on:
-      - postgres
-
-  wallet-service:
-    build: ./wallet-service
-    container_name: wallet-service
-    ports:
-      - "8083:8083"
-    environment:
-      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/wallet_db
-      - SPRING_DATASOURCE_USERNAME=postgres
-      - SPRING_DATASOURCE_PASSWORD=postgres
-    depends_on:
-      - postgres
-
-  auction-service:
-    build: ./auction-service
-    container_name: auction-service
-    ports:
-      - "8084:8084"
-    environment:
-      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/auction_db
-      - SPRING_DATASOURCE_USERNAME=postgres
-      - SPRING_DATASOURCE_PASSWORD=postgres
-    depends_on:
-      - postgres
-
-volumes:
-  bidcast_data: 
+      - "6379:6379"
