@@ -52,10 +52,13 @@ public class Wallet {
     @Builder.Default
     private BigDecimal balance = BigDecimal.ZERO;
 
+<<<<<<< HEAD
     @Column(name = "frozen_balance", nullable = false, precision = 12, scale = 4)
     @Builder.Default
     private BigDecimal frozenBalance = BigDecimal.ZERO;
 
+=======
+>>>>>>> origin/main
     @Version
     @Column(name = "version", nullable = false)
     private long version;
@@ -78,6 +81,7 @@ public class Wallet {
         balance = balance.subtract(amount);
     }
 
+<<<<<<< HEAD
     public void freeze(BigDecimal amount) {
         if (balance.compareTo(amount) < 0) {
             throw new InsufficientWalletBalanceException(id);
@@ -101,6 +105,8 @@ public class Wallet {
         frozenBalance = frozenBalance.subtract(amount);
     }
 
+=======
+>>>>>>> origin/main
     public void credit(BigDecimal amount) {
         if (amount == null || amount.signum() <= 0) {
             throw new IllegalArgumentException("El monto a acreditar debe ser positivo");
