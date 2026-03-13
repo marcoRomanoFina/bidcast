@@ -188,3 +188,46 @@ wallet_deploy:
     - if: $CI_COMMIT_BRANCH == "main"
       changes:
         - wallet-service/**/*
+
+auction_test:
+  stage: test
+  services:
+    - name: docker:24.0.5-dind 
+      alias: docker
+  variables:
+    DOCKER_HOST: tcp://docker:2375 
+    DOCKER_TLS_CERTDIR: ""
+  script:
+    - echo "🧪 Corriendo tests Auction con Testcontainers..."
+    - cd auction-service
+    - mvn test 
+  rules:
+    - changes:
+        - auction-service/**/*
+
+auction_build:
+  stage: build
+  needs: ["auction_test"]
+  image: docker:24.0.5
+  services:
+    - name: docker:24.0.5-dind
+      alias: docker
+  variables:
+    DOCKER_HOST: tcp://docker:2375
+    DOCKER_TLS_CERTDIR: ""
+  script:
+    - cd auction-service
+    - docker build -t bidcast/auction-service .
+  rules:
+    - changes:
+        - auction-service/**/*
+        
+auction_deploy:
+  stage: deploy
+  needs: ["auction_build"]
+  script:
+    - echo "🚀 Desplegando Auction Service (Simulado)..."
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+      changes:
+        - auction-service/**/*
