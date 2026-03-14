@@ -9,38 +9,30 @@ import org.springframework.security.config.annotation.web.configuration.EnableWe
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.SecurityFilterChain;
-import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 
 @Configuration
 @EnableWebSecurity
 @RequiredArgsConstructor
 public class SecurityConfig {
 
-    private final JwtAuthenticationFilter jwtAuthFilter;
     private final AuthenticationProvider authenticationProvider;
 
+    /**
+     * El microservicio ahora confía en que el API Gateway ya validó la identidad del usuario.
+     * Mantenemos la sesión STATELESS y permitimos el acceso, delegando la protección al Gateway.
+     */
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
-        return http
-            .csrf(AbstractHttpConfigurer::disable) 
+        http
+            .csrf(AbstractHttpConfigurer::disable)
             .authorizeHttpRequests(auth -> auth
-                // 1. LA SALA DE ESPERA (Pública)
-                // Dejamos que cualquiera pueda registrarse o loguearse sin tener token
-                .requestMatchers("/api/auth/**").permitAll() 
-                
-                // 2. EL RESTO DEL EDIFICIO (VIP)
-                // Cualquier otra petición (ej: /api/bids) va a exigir un token válido
-                .anyRequest().authenticated() 
+                .anyRequest().permitAll() // El "Patovica" está ahora en el Gateway
             )
             .sessionManagement(session -> session
-                // 3. LA REGLA DE ORO DEL JWT
-                // Le decimos a Spring que no guarde sesiones en memoria (STATELESS). 
-                // Cada petición es independiente y se valida solo con el Token.
-                .sessionCreationPolicy(SessionCreationPolicy.STATELESS) 
+                .sessionCreationPolicy(SessionCreationPolicy.STATELESS)
             )
-            // 4. PRESENTAMOS AL EQUIPO
-            .authenticationProvider(authenticationProvider) // El "Jefe de RRHH" que hace la matemática
-            .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class) // Ponemos a tu "Patovica" en la puerta
-            .build();
-    }        
+            .authenticationProvider(authenticationProvider);
+
+        return http.build();
+    }
 }
