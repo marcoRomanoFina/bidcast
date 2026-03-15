@@ -109,7 +109,7 @@ ad_test:
       alias: docker
   variables:
     DOCKER_HOST: tcp://docker:2375 
-    DOCKER_TLS_CERTDIR: ""
+    DOCKER_TLS_CERTDIR: "" 
   script:
     - echo "🧪 Corriendo tests Advertisement con Testcontainers..."
     - cd advertisement-service
@@ -153,7 +153,7 @@ wallet_test:
       alias: docker
   variables:
     DOCKER_HOST: tcp://docker:2375 
-    DOCKER_TLS_CERTDIR: ""
+    DOCKER_TLS_CERTDIR: "" 
   script:
     - echo "🧪 Corriendo tests Wallet con Testcontainers..."
     - cd wallet-service
@@ -196,7 +196,7 @@ auction_test:
       alias: docker
   variables:
     DOCKER_HOST: tcp://docker:2375 
-    DOCKER_TLS_CERTDIR: ""
+    DOCKER_TLS_CERTDIR: "" 
   script:
     - echo "🧪 Corriendo tests Auction con Testcontainers..."
     - cd auction-service
@@ -231,3 +231,46 @@ auction_deploy:
     - if: $CI_COMMIT_BRANCH == "main"
       changes:
         - auction-service/**/*
+
+gateway_test:
+  stage: test
+  services:
+    - name: docker:24.0.5-dind 
+      alias: docker
+  variables:
+    DOCKER_HOST: tcp://docker:2375 
+    DOCKER_TLS_CERTDIR: "" 
+  script:
+    - echo "🧪 Corriendo tests Gateway con Testcontainers..."
+    - cd gateway-service
+    - mvn test 
+  rules:
+    - changes:
+        - gateway-service/**/*
+
+gateway_build:
+  stage: build
+  needs: ["gateway_test"]
+  image: docker:24.0.5
+  services:
+    - name: docker:24.0.5-dind
+      alias: docker
+  variables:
+    DOCKER_HOST: tcp://docker:2375
+    DOCKER_TLS_CERTDIR: ""
+  script:
+    - cd gateway-service
+    - docker build -t bidcast/gateway-service .
+  rules:
+    - changes:
+        - gateway-service/**/*
+        
+gateway_deploy:
+  stage: deploy
+  needs: ["gateway_build"]
+  script:
+    - echo "🚀 Desplegando Gateway Service (Simulado)..."
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+      changes:
+        - gateway-service/**/*
