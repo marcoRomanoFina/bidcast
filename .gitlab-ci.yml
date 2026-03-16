@@ -1,4 +1,4 @@
-image: maven:3.9.6-eclipse-temurin-21
+image: maven:3.9.9-eclipse-temurin-21
 
 variables:
   MAVEN_OPTS: "-Dmaven.repo.local=.m2/repository"
@@ -7,35 +7,36 @@ cache:
   paths:
     - .m2/repository
 
-
 stages:
   - test
   - build
   - deploy
 
-
+# ==========================================
+# DEVICE SERVICE
+# ==========================================
 device_test:
   stage: test
   services:
-    - name: postgres:15-alpine
+    - name: postgres:17
       alias: postgres
   variables:
     POSTGRES_PASSWORD: postgres
     SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/devices_db
   script:
-    - echo "🧪 Corriendo tests Device..."
     - cd device-service
     - mvn test
   rules:
     - changes:
         - device-service/**/*
+        - .gitlab-ci.yml
 
 device_build:
   stage: build
   needs: ["device_test"]
-  image: docker:24.0.5
+  image: docker:27
   services:
-    - name: docker:24.0.5-dind
+    - name: docker:27-dind
       alias: docker
   variables:
     DOCKER_HOST: tcp://docker:2375
@@ -46,6 +47,7 @@ device_build:
   rules:
     - changes:
         - device-service/**/*
+        - .gitlab-ci.yml
 
 device_deploy:
   stage: deploy
@@ -56,30 +58,33 @@ device_deploy:
     - if: $CI_COMMIT_BRANCH == "main"
       changes:
         - device-service/**/*
+        - .gitlab-ci.yml
 
-
+# ==========================================
+# USER SERVICE
+# ==========================================
 user_test:
   stage: test
   services:
-    - name: docker:24.0.5-dind 
+    - name: docker:27-dind 
       alias: docker
   variables:
     DOCKER_HOST: tcp://docker:2375 
     DOCKER_TLS_CERTDIR: "" 
   script:
-    - echo "🧪 Corriendo tests User con Testcontainers..."
     - cd user-service
     - mvn test
   rules:
     - changes:
         - user-service/**/*
+        - .gitlab-ci.yml
 
 user_build:
   stage: build
   needs: ["user_test"]
-  image: docker:24.0.5
+  image: docker:27
   services:
-    - name: docker:24.0.5-dind
+    - name: docker:27-dind
       alias: docker
   variables:
     DOCKER_HOST: tcp://docker:2375
@@ -90,6 +95,7 @@ user_build:
   rules:
     - changes:
         - user-service/**/*
+        - .gitlab-ci.yml
 
 user_deploy:
   stage: deploy
@@ -100,31 +106,33 @@ user_deploy:
     - if: $CI_COMMIT_BRANCH == "main"
       changes:
         - user-service/**/*
+        - .gitlab-ci.yml
 
-
+# ==========================================
+# ADVERTISEMENT SERVICE
+# ==========================================
 ad_test:
   stage: test
   services:
-    - name: docker:24.0.5-dind 
+    - name: docker:27-dind 
       alias: docker
   variables:
     DOCKER_HOST: tcp://docker:2375 
     DOCKER_TLS_CERTDIR: "" 
   script:
-    - echo "🧪 Corriendo tests Advertisement con Testcontainers..."
     - cd advertisement-service
     - mvn test 
   rules:
     - changes:
         - advertisement-service/**/*
-
+        - .gitlab-ci.yml
 
 ad_build:
   stage: build
   needs: ["ad_test"]
-  image: docker:24.0.5
+  image: docker:27
   services:
-    - name: docker:24.0.5-dind
+    - name: docker:27-dind
       alias: docker
   variables:
     DOCKER_HOST: tcp://docker:2375
@@ -135,6 +143,7 @@ ad_build:
   rules:
     - changes:
         - advertisement-service/**/*
+        - .gitlab-ci.yml
         
 ad_deploy:
   stage: deploy
@@ -145,29 +154,33 @@ ad_deploy:
     - if: $CI_COMMIT_BRANCH == "main"
       changes:
         - advertisement-service/**/*
+        - .gitlab-ci.yml
 
+# ==========================================
+# WALLET SERVICE
+# ==========================================
 wallet_test:
   stage: test
   services:
-    - name: docker:24.0.5-dind 
+    - name: docker:27-dind 
       alias: docker
   variables:
     DOCKER_HOST: tcp://docker:2375 
     DOCKER_TLS_CERTDIR: "" 
   script:
-    - echo "🧪 Corriendo tests Wallet con Testcontainers..."
     - cd wallet-service
     - mvn test 
   rules:
     - changes:
         - wallet-service/**/*
+        - .gitlab-ci.yml
 
 wallet_build:
   stage: build
   needs: ["wallet_test"]
-  image: docker:24.0.5
+  image: docker:27
   services:
-    - name: docker:24.0.5-dind
+    - name: docker:27-dind
       alias: docker
   variables:
     DOCKER_HOST: tcp://docker:2375
@@ -178,6 +191,7 @@ wallet_build:
   rules:
     - changes:
         - wallet-service/**/*
+        - .gitlab-ci.yml
         
 wallet_deploy:
   stage: deploy
@@ -188,29 +202,33 @@ wallet_deploy:
     - if: $CI_COMMIT_BRANCH == "main"
       changes:
         - wallet-service/**/*
+        - .gitlab-ci.yml
 
+# ==========================================
+# AUCTION SERVICE
+# ==========================================
 auction_test:
   stage: test
   services:
-    - name: docker:24.0.5-dind 
+    - name: docker:27-dind 
       alias: docker
   variables:
     DOCKER_HOST: tcp://docker:2375 
     DOCKER_TLS_CERTDIR: "" 
   script:
-    - echo "🧪 Corriendo tests Auction con Testcontainers..."
     - cd auction-service
     - mvn test 
   rules:
     - changes:
         - auction-service/**/*
+        - .gitlab-ci.yml
 
 auction_build:
   stage: build
   needs: ["auction_test"]
-  image: docker:24.0.5
+  image: docker:27
   services:
-    - name: docker:24.0.5-dind
+    - name: docker:27-dind
       alias: docker
   variables:
     DOCKER_HOST: tcp://docker:2375
@@ -221,6 +239,7 @@ auction_build:
   rules:
     - changes:
         - auction-service/**/*
+        - .gitlab-ci.yml
         
 auction_deploy:
   stage: deploy
@@ -231,29 +250,16 @@ auction_deploy:
     - if: $CI_COMMIT_BRANCH == "main"
       changes:
         - auction-service/**/*
+        - .gitlab-ci.yml
 
-gateway_test:
-  stage: test
-  services:
-    - name: docker:24.0.5-dind 
-      alias: docker
-  variables:
-    DOCKER_HOST: tcp://docker:2375 
-    DOCKER_TLS_CERTDIR: "" 
-  script:
-    - echo "🧪 Corriendo tests Gateway con Testcontainers..."
-    - cd gateway-service
-    - mvn test 
-  rules:
-    - changes:
-        - gateway-service/**/*
-
+# ==========================================
+# GATEWAY SERVICE
+# ==========================================
 gateway_build:
   stage: build
-  needs: ["gateway_test"]
-  image: docker:24.0.5
+  image: docker:27
   services:
-    - name: docker:24.0.5-dind
+    - name: docker:27-dind
       alias: docker
   variables:
     DOCKER_HOST: tcp://docker:2375
@@ -264,6 +270,7 @@ gateway_build:
   rules:
     - changes:
         - gateway-service/**/*
+        - .gitlab-ci.yml
         
 gateway_deploy:
   stage: deploy
@@ -274,3 +281,52 @@ gateway_deploy:
     - if: $CI_COMMIT_BRANCH == "main"
       changes:
         - gateway-service/**/*
+        - .gitlab-ci.yml
+
+# ==========================================
+# BILLING SERVICE
+# ==========================================
+billing_test:
+  stage: test
+  services:
+    - name: docker:27-dind 
+      alias: docker
+  variables:
+    DOCKER_HOST: tcp://docker:2375 
+    DOCKER_TLS_CERTDIR: "" 
+  script:
+    - cd billing-service
+    - mvn test 
+  rules:
+    - changes:
+        - billing-service/**/*
+        - .gitlab-ci.yml
+
+billing_build:
+  stage: build
+  needs: ["billing_test"]
+  image: docker:27
+  services:
+    - name: docker:27-dind
+      alias: docker
+  variables:
+    DOCKER_HOST: tcp://docker:2375
+    DOCKER_TLS_CERTDIR: ""
+  script:
+    - cd billing-service
+    - docker build -t bidcast/billing-service .
+  rules:
+    - changes:
+        - billing-service/**/*
+        - .gitlab-ci.yml
+        
+billing_deploy:
+  stage: deploy
+  needs: ["billing_build"]
+  script:
+    - echo "🚀 Desplegando Billing Service (Simulado)..."
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+      changes:
+        - billing-service/**/*
+        - .gitlab-ci.yml

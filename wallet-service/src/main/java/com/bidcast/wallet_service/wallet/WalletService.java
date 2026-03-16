@@ -16,6 +16,27 @@ public class WalletService {
     private final WalletRepository walletRepository;
 
     @Transactional
+    public void credit(UUID ownerId, WalletOwnerType ownerType, BigDecimal amount) {
+        log.info("Crediting {} to owner {} ({})", amount, ownerId, ownerType);
+        
+        Wallet wallet = walletRepository.findByOwnerIdAndOwnerType(ownerId, ownerType)
+                .orElseGet(() -> {
+                    log.info("Creating new wallet for owner {} ({})", ownerId, ownerType);
+                    return Wallet.builder()
+                            .ownerId(ownerId)
+                            .ownerType(ownerType)
+                            .currencyCode("ARS")
+                            .balance(BigDecimal.ZERO)
+                            .frozenBalance(BigDecimal.ZERO)
+                            .build();
+                });
+
+        wallet.credit(amount);
+        walletRepository.save(wallet);
+        log.info("Balance credited successfully. New balance: {}", wallet.getBalance());
+    }
+
+    @Transactional
     public void freeze(UUID ownerId, WalletOwnerType ownerType, BigDecimal amount, String referenceId) {
         log.info("Freezing {} for owner {} ({})", amount, ownerId, ownerType);
         

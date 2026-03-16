@@ -95,3 +95,15 @@ services:
       - SPRING_PROFILES_ACTIVE=dev
     depends_on:
       - postgres
+
+  billing-service:
+    build:
+      context: ./billing-service
+      dockerfile: Dockerfile
+    container_name: bidcast-billing
+    environment:
+      - SPRING_PROFILES_ACTIVE=dev
+      - MP_ACCESS_TOKEN=${MP_ACCESS_TOKEN}
+    depends_on:
+      - postgres
+      - rabbitmq

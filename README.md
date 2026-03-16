@@ -1,72 +1,66 @@
-# 🛰️ Bidcast: Plataforma RTB para DOOH
+# Bidcast - Real-Time Bidding Platform
 
-**Bidcast** es un ecosistema de microservicios para la gestión y subasta de publicidad en pantallas físicas (Digital Out-of-Home). El sistema permite a los anunciantes pujar por espacios publicitarios en tiempo real y a las pantallas obtener el contenido más rentable basándose en algoritmos de subasta.
+Plataforma AdTech y FinTech diseñada para la subasta de anuncios en tiempo real (RTB) sobre pantallas físicas, con un motor financiero integrado para la gestión de presupuestos y cobros automáticos.
 
-## 🏛️ Arquitectura del Sistema
+## Arquitectura del Sistema
 
-```mermaid
-flowchart TD
-    %% Estilos de Nodos
-    classDef service fill:#f9f,stroke:#333,stroke-width:2px,rx:10,ry:10
-    classDef storage fill:#fff,stroke:#333,stroke-width:2px,stroke-dasharray: 5 5
-    classDef queue fill:#ff9,stroke:#333,stroke-width:2px
-    classDef external fill:#eee,stroke:#333,stroke-width:1px
+El ecosistema está compuesto por microservicios desacoplados bajo una arquitectura Event-Driven:
 
-    subgraph Core_Engine ["🚀 Motor de Subastas & Finanzas"]
-        direction TB
-        A[Auction Service]:::service
-        W[Wallet Service]:::service
-        
-        R[(Redis Hot Data)]:::storage
-        P[(Postgres Ledger)]:::storage
-        
-        A <--> R
-        W <--> P
-    end
+1.  **API Gateway**: Único punto de entrada reactivo (Spring Cloud Gateway). Centraliza la seguridad y el ruteo.
+2.  **User Service**: Gestión de identidades y roles (Advertiser, Publisher).
+3.  **Billing Service**: Integración con Mercado Pago, gestión de intenciones de pago y validación de webhooks.
+4.  **Wallet Service**: Ledger financiero interno. Procesa créditos y débitos en tiempo real.
+5.  **Advertisement Service**: Gestión de campañas, presupuestos y assets multimedia.
+6.  **Auction Service**: Motor de subastas de baja latencia (<100ms) que decide el anuncio ganador.
+7.  **Device Service**: Gestión de inventario de pantallas y telemetría de sesiones.
 
-    subgraph Async_Bridge ["📡 Integración"]
-        RMQ{{"RabbitMQ (Events)"}}:::queue
-        A -.-> |Settlement Command| RMQ
-        RMQ -.-> |Consolidation| W
-    end
+## Flujo Crítico de Datos
 
-    subgraph Actors ["👤 Actores"]
-        ADV[Anunciante]:::external
-        SCR[Pantalla Física]:::external
-    end
+1.  **Carga de Saldo**: Anunciante paga vía Billing -> Webhook verificado -> Evento asíncrono (RabbitMQ) -> Wallet acredita saldo.
+2.  **Subasta**: Pantalla solicita anuncio -> Auction filtra campañas por presupuesto y puja -> Retorna ganador.
+3.  **Settlement**: Tras la reproducción -> Evento ProofOfPlay -> Wallet debita el costo de la puja del presupuesto del anunciante.
 
-    ADV --> |Post Bids| A
-    SCR --> |Request Ads| A
-    SCR --> |Proof of Play| A
+## Decisiones de Ingeniería y Seguridad
 
-    %% Estilos adicionales
-    style Core_Engine fill:#f5f5f5,stroke:#666,stroke-width:1px,stroke-dasharray: 5 5
+### 1. Integridad Financiera
+*   **Concurrencia**: Uso de Optimistic Locking (@Version) en las entidades de Payment y Wallet para prevenir el problema del doble crédito/débito en hilos simultáneos.
+*   **Precisión**: Uso estricto de java.math.BigDecimal con precisión configurada en base de datos para evitar errores de redondeo en transacciones.
+
+### 2. Blindaje del Gateway
+*   **Header Scrubbing**: El Gateway elimina cualquier header X-User-* entrante para prevenir el spoofing de identidad.
+*   **Verified Identity**: Solo el Gateway tiene permiso para inyectar headers de identidad tras validar el JWT, garantizando que los microservicios internos confíen ciegamente en la data recibida.
+
+### 3. Idempotencia y Seguridad Criptográfica
+*   **Webhook Security**: Validación de firma HMAC-SHA256 (x-signature) en el microservicio de Billing para asegurar el origen de las notificaciones de pago.
+*   **Stateless Proof of Play**: El Auction Service emite tickets de reproducción firmados con HMAC-SHA256. Esto permite validar la integridad del cobro (anunciante y precio) sin necesidad de persistencia intermedia, protegiendo el sistema contra la manipulación de datos por parte de dispositivos externos.
+*   **Doble Check**: Verificación de estado previo (APPROVED) antes de procesar cualquier evento para garantizar la idempotencia financiera.
+
+### 4. Calidad y Testing
+*   **Testcontainers**: Uso obligatorio de contenedores reales (PostgreSQL, RabbitMQ, Redis) para los tests de integración, garantizando que el comportamiento en desarrollo sea idéntico a producción.
+
+## Stack Tecnológico
+*   **Runtime**: Java 21 / Spring Boot 4.0.3
+*   **Broker**: RabbitMQ (AMQP)
+*   **Persistence**: PostgreSQL (Cold Data) / Redis (Hot Data & Rate Limiting)
+*   **Tools**: Docker & Docker Compose
+
+## Backlog Pendiente para MVP
+
+### 1. Rol de Administrador y Moderación
+*   **Gobierno de Contenido**: Implementación de un flujo de aprobación manual para campañas creadas por Advertisers antes de ser habilitadas en las subastas.
+*   **Gestión Operativa**: Endpoints protegidos para la supervisión de saldos totales del sistema y estados de conectividad de las pantallas.
+
+### 2. Microservicio de Device Player
+*   **Client Software**: Software ligero para la ejecución en hardware físico que gestione la descarga de media, el reporte de telemetría y la solicitud de anuncios al Auction Service.
+
+### 3. Almacenamiento de Media
+*   **Asset Management**: Integración con servicios de almacenamiento de objetos (S3/Cloudinary) para la gestión escalable de videos e imágenes de alta resolución.
+
+### 4. Dashboard de Analíticas
+*   **Reporting**: Visualización en tiempo real para Anunciantes (gasto y alcance) y Publishers (ingresos y disponibilidad de pantallas).
+
+## Ejecución
+El ecosistema completo está diseñado para levantarse con una sola instrucción:
+```bash
+docker-compose up -d
 ```
-
-## 🛠️ Stack Tecnológico
-
-*   **Lenguaje**: Java 21.
-*   **Framework**: Spring Boot 4.0.3 (con Virtual Threads).
-*   **Base de Datos**: PostgreSQL 16 & Redis 7.
-*   **Mensajería**: RabbitMQ.
-*   **IA Agent**: Desarrollado con el soporte de **Gemini CLI**.
-*   **Testing**: JUnit 5, Mockito & Testcontainers (Alpine).
-
-## 🚀 Estado del Proyecto
-
-### 1. Auction Service (RTB Engine)
-*   **Redis-Only**: Centralización de datos calientes (Sets, Metadata JSON y Saldos Atómicos).
-*   **Funcional**: Algoritmo de subasta implementado con Java Streams puros.
-*   **Resiliente**: Mecanismo de **Self-Healing** para reconstrucción automática de memoria desde Postgres.
-*   **Seguro**: Validación stateless de reproducciones mediante **HMAC-SHA256**.
-
-### 2. Wallet Service (Ledger)
-*   **Garantía**: Control de saldos con soporte para presupuestos congelados (Reservas).
-*   **Eficiencia**: Liquidación de sesiones mediante procesamiento asíncrono vía RabbitMQ.
-
-## 🎯 Próximos Pasos
-
-*   Integración con pasarela de pagos (Stripe).
-*   Dashboard para anunciantes (Frontend React/TS).
-*   API Gateway y seguridad JWT.
-*   Monitoreo y observabilidad de latencias.
