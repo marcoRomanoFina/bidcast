@@ -10,14 +10,7 @@ jobs:
   changes:
     runs-on: ubuntu-latest
     outputs:
-      
-      advertisement: ${{ steps.filter.outputs.advertisement }}
-      auction: ${{ steps.filter.outputs.auction }}
-      billing: ${{ steps.filter.outputs.billing }}
-      device: ${{ steps.filter.outputs.device }}
-      gateway: ${{ steps.filter.outputs.gateway }}
-      user: ${{ steps.filter.outputs.user }}
-      wallet: ${{ steps.filter.outputs.wallet }}
+      services: ${{ steps.filter.outputs.changes }}
     steps:
       - uses: actions/checkout@v4
       - uses: dorny/paths-filter@v3
@@ -39,17 +32,14 @@ jobs:
             wallet:
               - 'wallet-service/**'
 
-  
   build-and-test:
     needs: changes
+    if: ${{ needs.changes.outputs.services != '[]' && needs.changes.outputs.services != '' }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        service: [advertisement, auction, billing, device, gateway, user, wallet]
-    
-    # Solo se ejecuta si el filtro detectó cambios en este servicio específico
-    if: needs.changes.outputs[matrix.service] == 'true'
+        service: ${{ fromJSON(needs.changes.outputs.services) }}
     
     steps:
       - uses: actions/checkout@v4
@@ -63,10 +53,8 @@ jobs:
 
       - name: Build and Test with Maven
         env:
-          # Estos los configuras en GitHub -> Settings > Secrets
           JWT_SECRET_KEY: ${{ secrets.JWT_SECRET_KEY }}
           AUCTION_RECEIPT_SECRET: ${{ secrets.AUCTION_RECEIPT_SECRET }}
-          # Valores de prueba fijos para que los tests no fallen
           MP_ACCESS_TOKEN: 'TEST-ACCESS-TOKEN-FOR-CI'
           MP_WEBHOOK_SECRET: 'test_webhook_secret_for_ci'
         run: |
