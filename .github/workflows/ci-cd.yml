@@ -1,0 +1,88 @@
+name: Bidcast CI/CD
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      
+      advertisement: ${{ steps.filter.outputs.advertisement }}
+      auction: ${{ steps.filter.outputs.auction }}
+      billing: ${{ steps.filter.outputs.billing }}
+      device: ${{ steps.filter.outputs.device }}
+      gateway: ${{ steps.filter.outputs.gateway }}
+      user: ${{ steps.filter.outputs.user }}
+      wallet: ${{ steps.filter.outputs.wallet }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            advertisement:
+              - 'advertisement-service/**'
+            auction:
+              - 'auction-service/**'
+            billing:
+              - 'billing-service/**'
+            device:
+              - 'device-service/**'
+            gateway:
+              - 'gateway-service/**'
+            user:
+              - 'user-service/**'
+            wallet:
+              - 'wallet-service/**'
+
+  
+  build-and-test:
+    needs: changes
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        service: [advertisement, auction, billing, device, gateway, user, wallet]
+    
+    # Solo se ejecuta si el filtro detectó cambios en este servicio específico
+    if: needs.changes.outputs[matrix.service] == 'true'
+    
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: 'maven'
+
+      - name: Build and Test with Maven
+        env:
+          # Estos los configuras en GitHub -> Settings > Secrets
+          JWT_SECRET_KEY: ${{ secrets.JWT_SECRET_KEY }}
+          AUCTION_RECEIPT_SECRET: ${{ secrets.AUCTION_RECEIPT_SECRET }}
+          # Valores de prueba fijos para que los tests no fallen
+          MP_ACCESS_TOKEN: 'TEST-ACCESS-TOKEN-FOR-CI'
+          MP_WEBHOOK_SECRET: 'test_webhook_secret_for_ci'
+        run: |
+          cd ${{ matrix.service }}-service
+          chmod +x mvnw
+          ./mvnw test
+          
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker Image
+        run: |
+          cd ${{ matrix.service }}-service
+          docker build -t bidcast/${{ matrix.service }}-service .
+
+      - name: Simulated Deploy
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        run: |
+          echo "Desplegando ${{ matrix.service }}-service (Simulado)..."

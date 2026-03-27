@@ -1,9 +1,10 @@
 # Bidcast
 
-Bidcast is a personal microservices project inspired by AdTech real-time bidding systems.
-It connects advertisers, physical display devices, auctions, and internal financial flows in a distributed architecture designed to explore concurrency, consistency, idempotency, and service-to-service communication.
+Bidcast is a personal microservices project inspired by AdTech real-time bidding (RTB) platforms.
+It allows advertisers to bid for available time slots on physical display devices, while device owners monetize their screen time by selling ad space through real-time auctions.
+The platform manages auctions, wallets, billing, and payments across multiple services, and is designed to practice concurrency, consistency, idempotency, and asynchronous service-to-service communication.
 
-The project is intentionally more infrastructure-heavy than a typical CRUD application. The goal was not just to "build features", but to work through the kinds of problems that appear when money, retries, distributed state, and asynchronous messaging all interact.
+This project is intentionally infrastructure-focused. The goal is to gain hands-on experience with real-world scenarios involving payments, retries, distributed state, and asynchronous messaging.
 
 > Work in progress focused on distributed systems and backend engineering, not on shipping a polished end-user product.
 
@@ -70,17 +71,17 @@ sequenceDiagram
 
 ## Reliability Patterns
 
-The project includes several patterns that are common in systems where consistency and retries matter:
+This project implements several reliability patterns commonly used in distributed systems:
 
-- multi-layer idempotency using fast-path checks plus database constraints
-- optimistic locking and duplicate handling on financial flows
+- multi-layer idempotency (fast-path checks + database constraints)
+- optimistic locking and duplicate handling for financial flows
 - transactional outbox for durable event publication
-- reconciliation jobs for stale or incomplete distributed flows
+- reconciliation jobs for stale or incomplete workflows
 - signed receipt validation before final settlement
-- gateway-side identity shielding through trusted internal headers only
+- gateway-side identity shielding using trusted internal headers
 - Redis-backed distributed rate limiting
 
-These choices are deliberate. Some are arguably overkill for a greenfield MVP, but they were included to force exposure to real backend trade-offs.
+Some of these patterns go beyond what a typical MVP would require, but they were intentionally included to explore real-world trade-offs in consistency, retries, and distributed state.
 
 ## Tech Stack
 
