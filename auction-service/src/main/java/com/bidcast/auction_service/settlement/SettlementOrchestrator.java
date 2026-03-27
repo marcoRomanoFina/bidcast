@@ -5,20 +5,24 @@ import com.bidcast.auction_service.bid.BidPersistenceService;
 import com.bidcast.auction_service.bid.BidRehydrationService;
 import com.bidcast.auction_service.bid.BidStatus;
 import com.bidcast.auction_service.bid.SessionBid;
-import com.bidcast.auction_service.config.RabbitMQConfig;
+import com.bidcast.auction_service.bid.SessionBidRepository;
+import com.bidcast.auction_service.core.outbox.OutboxEvent;
+import com.bidcast.auction_service.core.outbox.OutboxRepository;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.amqp.rabbit.core.RabbitTemplate;
-import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.List;
-import java.util.Optional;
 
 /**
- * RECONCILIADOR: Cierre de Caja y Liquidación.
+ * RESPONSABILIDAD: Liquidación final de fondos tras el cierre de sesión.
+ * Consolida el gasto registrado en Redis y lo persiste vía Transactional
+ * Outbox.
  */
 @Service
 @RequiredArgsConstructor
@@ -26,72 +30,94 @@ import java.util.Optional;
 public class SettlementOrchestrator {
 
     private final BidPersistenceService persistenceService;
+    private final SessionBidRepository sessionBidRepository;
     private final BidInfrastructureService infrastructureService;
     private final BidRehydrationService rehydrationService;
-    private final StringRedisTemplate redisTemplate;
-    private final RabbitTemplate rabbitTemplate;
+    private final OutboxRepository outboxRepository;
+    private final ObjectMapper objectMapper;
 
+    /**
+     * Orquesta el cierre de sesión y la liquidación de fondos.
+     * Implementa el patrón Transactional Outbox para garantizar consistencia
+     * eventual.
+     */
+    @Transactional
     public void orchestrateSettlement(String sessionId, String publisherId) {
-        log.info("Iniciando liquidación consolidada para sesión: {}", sessionId);
+        log.info("Starting consolidated settlement (Transactional Outbox) for session {}", sessionId);
 
-        List<SessionBid> bidsToSettle = persistenceService.findActiveBySession(sessionId);
-
-        if (bidsToSettle.isEmpty()) {
-            log.info("No hay transacciones pendientes para liquidar en la sesión {}", sessionId);
-            return;
+        List<SessionBid> activeBids = sessionBidRepository.findBySessionIdAndStatus(sessionId, BidStatus.ACTIVE);
+        for (SessionBid bid : activeBids) {
+            try {
+                // El gasto real se calcula comparando el presupuesto inicial vs lo que queda en
+                // Redis.
+                BigDecimal spentAmount = calculateSpentAmount(bid);
+                if (spentAmount.compareTo(BigDecimal.ZERO) > 0) {
+                    // guardamos el event dentro de la transaccion para desp mandarlo
+                    saveSettlementCommandInOutbox(bid, publisherId, spentAmount);
+                }
+                persistenceService.updateStatus(bid.getId(), BidStatus.CLOSED);
+            } catch (Exception e) {
+                log.error("Critical failure while settling bid {}: {}", bid.getId(), e.getMessage());
+                throw e; // Relanzamos para disparar rollback de la transacción de DB.
+            }
         }
 
-        bidsToSettle.forEach(bid -> this.processBidSettlement(bid, publisherId));
-
+        // Limpieza de infraestructura caliente
         infrastructureService.purgeSessionIndex(sessionId);
-        log.info("Liquidación terminada para sesión {}.", sessionId);
+        log.info("Settlement finished for session {}.", sessionId);
     }
 
-    private void processBidSettlement(SessionBid bid, String publisherId) {
-        String budgetKey = String.format("session:%s:bid:%s:budget", bid.getSessionId(), bid.getId());
-        String bidId = bid.getId().toString();
-        
+    /**
+     * Persiste el comando de cobro en la tabla local.
+     * El OutboxRelay se encargará del despacho asíncrono.
+     */
+    private void saveSettlementCommandInOutbox(SessionBid bid, String pubId, BigDecimal spent) {
+        SessionSettlementCommand command = new SessionSettlementCommand(
+                bid.getId().toString(),
+                bid.getSessionId(),
+                bid.getAdvertiserId(),
+                pubId,
+                spent,
+                bid.getTotalBudget());
+
         try {
-            // 1. Calculamos el gasto basándonos en el saldo remanente
-            BigDecimal remainingBudget = Optional.ofNullable(redisTemplate.opsForValue().get(budgetKey))
-                    .map(centsStr -> {
-                        long remainingCents = Long.parseLong(centsStr);
-                        return BigDecimal.valueOf(remainingCents)
-                                .divide(new BigDecimal("100"), 4, RoundingMode.HALF_UP);
-                    })
-                    .orElseGet(() -> {
-                        // FALLBACK: Si Redis falló, usamos la lógica centralizada de rehidratación
-                        log.warn("Presupuesto ausente en Redis para {}. Reconstruyendo desde DB...", bidId);
-                        long realRemainingCents = rehydrationService.calculateRealBalanceCents(bid);
-                        return BigDecimal.valueOf(realRemainingCents)
-                                .divide(new BigDecimal("100"), 4, RoundingMode.HALF_UP);
-                    });
+            String payload = objectMapper.writeValueAsString(command);
+            OutboxEvent event = OutboxEvent.builder()
+                    .aggregateId(bid.getId().toString())
+                    .exchange("wallet.exchange")
+                    .routingKey("wallet.settlement.command")
+                    .payload(payload)
+                    .build();
 
-            BigDecimal spentAmount = bid.getTotalBudget().subtract(remainingBudget).max(BigDecimal.ZERO);
-
-            // 2. Si hubo gasto, emitimos la orden de cobro final
-            if (spentAmount.compareTo(BigDecimal.ZERO) > 0) {
-                SessionSettlementCommand command = new SessionSettlementCommand(
-                        bidId,
-                        bid.getSessionId(),
-                        bid.getAdvertiserId(),
-                        publisherId,
-                        spentAmount,
-                        bid.getTotalBudget()
-                );
-                
-                rabbitTemplate.convertAndSend(
-                        RabbitMQConfig.EXCHANGE_AUCTION, 
-                        RabbitMQConfig.ROUTING_KEY_SETTLEMENT, 
-                        command
-                );
-            }
-
-            persistenceService.updateStatus(bid.getId(), BidStatus.CLOSED);
-            infrastructureService.purgeBid(bid.getSessionId(), bidId);
-
+            outboxRepository.save(event);
+            log.info("Settlement command stored in Outbox for bid {}", bid.getId());
+        } catch (DataIntegrityViolationException ex) {
+            // Dos cierres concurrentes no deben duplicar el settlement del mismo bid.
+            log.info("Settlement for bid {} was already persisted in Outbox. Skipping duplicate.", bid.getId());
         } catch (Exception e) {
-            log.error("Fallo crítico al liquidar puja {}: {}", bidId, e.getMessage());
+            throw new RuntimeException("Failed to serialize settlement command", e);
         }
+    }
+
+    /**
+     * Calcula el gasto real sumando los ProofOfPlay (Audit Trail) de la base de
+     * datos.
+     * Ignoramos el contador de Redis en el cierre para garantizar consistencia
+     * financiera
+     * absoluta, incluso si hubo fallos en la infraestructura de caché.
+     */
+    private BigDecimal calculateSpentAmount(SessionBid bid) {
+        log.info("Calculating real spend from DB for bid {}", bid.getId());
+
+        // El BidRehydrationService ya tiene la lógica de sumar PoPs en la DB.
+        // Saldo Real (en centavos) = Total - Gastado
+        long currentBalanceCents = rehydrationService.calculateRealBalanceCents(bid);
+
+        BigDecimal initialBudget = bid.getTotalBudget();
+        BigDecimal remainingBudget = BigDecimal.valueOf(currentBalanceCents)
+                .divide(new BigDecimal("100"), 2, RoundingMode.HALF_UP);
+
+        // Gasto = Presupuesto Inicial - Saldo que calculamos desde los recibos
+        return initialBudget.subtract(remainingBudget).setScale(2, RoundingMode.HALF_UP);
     }
 }

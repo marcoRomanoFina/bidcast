@@ -1,5 +1,6 @@
 package com.bidcast.auction_service.auction;
 
+import com.bidcast.auction_service.core.exception.InvalidReceiptSignatureException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -12,12 +13,9 @@ import java.time.Instant;
 import java.util.Base64;
 import java.util.UUID;
 
-/**
- * SECURITY: Validación Criptográfica Stateless.
- * 
- * Este servicio permite que el sistema sea escalable al no requerir almacenamiento
- * de "recibos emitidos" en base de datos. La validez de un ticket de reproducción
- * se verifica matemáticamente mediante firmas HMAC-SHA256.
+/*
+Este servicio es para generar y comprobar la integridad y validez de los PoP, la idea es
+que sea stateless sin guardar nada en DB y mediante firmas HMAC-SHA256.
  */
 @Service
 @Slf4j
@@ -26,16 +24,13 @@ public class ReceiptTokenService {
     private final String secretKey;
     private static final String HMAC_ALGO = "HmacSHA256";
 
-    public ReceiptTokenService(@Value("${bidcast.auction.receipt-secret:defaultSuperSecretKey123!}") String secretKey) {
+    public ReceiptTokenService(@Value("${bidcast.auction.receipt-secret}") String secretKey) {
         this.secretKey = secretKey;
     }
 
-    /**
-     * Genera un token firmado (JWS-like) con metadatos incrustados.
-     * Formato: sessionId:bidId:advertiserId:bidPrice:timestamp:firma
-     * 
-     * Beneficio: El precio y el anunciante viajan protegidos, evitando que el 
-     * dispositivo (potencialmente vulnerable) altere los montos de cobro.
+    /*
+     Genera un token firmado (JWS-like) con metadatos incrustados.
+     Formato: sessionId:bidId:advertiserId:bidPrice:timestamp:firma
      */
     public String generateReceiptId(String sessionId, UUID bidId, String advertiserId, BigDecimal bidPrice) {
         long timestamp = Instant.now().getEpochSecond();
@@ -44,18 +39,16 @@ public class ReceiptTokenService {
         return payload + ":" + signature;
     }
 
-    /**
+    /*
      * El "Validador de la Verdad":
      * 1. Verifica que la firma coincida con los datos (Integridad).
      * 2. Verifica que el ticket no tenga más de 10 minutos (TTL).
-     * 3. Extrae los datos originales sin consultar ninguna base de datos.
-     * 
-     * @throws IllegalArgumentException ante cualquier intento de fraude o error.
+     * 3. Extrae los datos originales sin consultar DB
      */
     public ValidatedReceipt validateAndExtract(String receiptId, String expectedSessionId, UUID expectedBidId, long maxAgeSeconds) {
         String[] parts = receiptId.split(":");
         if (parts.length != 6) {
-            throw new IllegalArgumentException("Formato de recibo inválido");
+            throw new IllegalArgumentException("Invalid receipt format");
         }
 
         String sessionId = parts[0];
@@ -66,24 +59,25 @@ public class ReceiptTokenService {
         String providedSignature = parts[5];
 
         if (!sessionId.equals(expectedSessionId) || !bidIdStr.equals(expectedBidId.toString())) {
-            throw new IllegalArgumentException("El recibo no coincide con la sesión o la puja esperada");
+            throw new IllegalArgumentException("Receipt does not match the expected session or bid");
         }
 
         if (Instant.now().getEpochSecond() - timestamp > maxAgeSeconds) {
-            throw new IllegalArgumentException("El recibo ha expirado (Time-to-Live excedido)");
+            throw new IllegalArgumentException("Receipt expired (time-to-live exceeded)");
         }
 
         String payload = String.format("%s:%s:%s:%s:%d", sessionId, bidIdStr, advertiserId, bidPrice.toPlainString(), timestamp);
         String calculatedSignature = calculateHmac(payload);
         
         if (!calculatedSignature.equals(providedSignature)) {
-            log.error("¡ALERTA DE SEGURIDAD!: Se recibió un ticket con firma inválida para la sesión {}", sessionId);
-            throw new IllegalArgumentException("Firma del recibo inválida (posible manipulación)");
+            log.error("SECURITY ALERT: Received receipt with invalid signature for session {}", sessionId);
+            throw new InvalidReceiptSignatureException(sessionId, "Invalid receipt signature (possible tampering)");
         }
 
         return new ValidatedReceipt(advertiserId, bidPrice);
     }
-
+    
+    // metodo privado para calcular el hmac
     private String calculateHmac(String payload) {
         try {
             Mac mac = Mac.getInstance(HMAC_ALGO);
@@ -92,7 +86,7 @@ public class ReceiptTokenService {
             byte[] hmacBytes = mac.doFinal(payload.getBytes(StandardCharsets.UTF_8));
             return Base64.getUrlEncoder().withoutPadding().encodeToString(hmacBytes);
         } catch (Exception e) {
-            throw new RuntimeException("Error fatal al calcular HMAC", e);
+            throw new RuntimeException("Fatal error while calculating HMAC", e);
         }
     }
 }

@@ -11,6 +11,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import com.bidcast.advertisement_service.campaign.dto.CampaignRequest;
+import com.bidcast.advertisement_service.campaign.dto.CampaignResponse;
 
 @RestController
 @RequestMapping("/api/campaigns")
@@ -22,9 +23,9 @@ public class CampaignController {
 
     
     @PostMapping
-    public ResponseEntity<Campaign> create(@Valid @RequestBody CampaignRequest body, @RequestHeader("X-Advertiser-Id") UUID advertiserId) {
-        log.info("Solicitud de creacion de campana recibida: advertiserId={}, name={}", advertiserId, body.name());
+    public ResponseEntity<CampaignResponse> create(@Valid @RequestBody CampaignRequest body, @RequestHeader("X-User-Id") UUID advertiserId) {
+        log.info("Campaign creation request received: advertiserId={}, name={}", advertiserId, body.name());
         Campaign savedCampaign = campaignService.createCampaign(advertiserId,body);
-        return new ResponseEntity<>(savedCampaign, HttpStatus.CREATED);
+        return new ResponseEntity<>(CampaignResponse.from(savedCampaign), HttpStatus.CREATED);
     }
 }

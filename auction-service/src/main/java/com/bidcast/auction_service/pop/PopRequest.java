@@ -3,14 +3,15 @@ package com.bidcast.auction_service.pop;
 import jakarta.validation.constraints.NotBlank;
 import java.util.UUID;
 
+// dto para la creacion del PoP
 public record PopRequest(
-    @NotBlank(message = "El ID de sesión es obligatorio")
+    @NotBlank(message = "Session id is required")
     String sessionId,
     
-    @NotBlank(message = "El ID de la puja es obligatorio")
+    @NotBlank(message = "Bid id is required")
     String bidId,
     
-    @NotBlank(message = "El ID del recibo de reproducción es obligatorio")
+    @NotBlank(message = "Playback receipt id is required")
     String playReceiptId
 ) {
     public UUID getBidIdAsUuid() {

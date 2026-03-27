@@ -10,6 +10,9 @@ import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Optional;
+import java.util.UUID;
+
 @Service
 @RequiredArgsConstructor
 @Slf4j
@@ -21,33 +24,51 @@ public class WebhookService {
 
     @Transactional
     public void processNotification(String paymentId) {
-        log.info("Procesando notificación de pago de Mercado Pago: {}", paymentId);
+        log.info("Processing Mercado Pago payment notification: {}", paymentId);
 
         try {
+            if (paymentId == null || paymentId.isBlank()) {
+                log.warn("Webhook ignored: empty paymentId");
+                return;
+            }
+
             // 1. Consultamos el estado real del pago en Mercado Pago (Double-Check)
             // Se inyecta el client directamente desde MercadoPagoConfiguration
             Payment mpPayment = paymentClient.get(Long.parseLong(paymentId));
             String externalReference = mpPayment.getExternalReference();
             
             if (externalReference == null) {
-                log.error("El pago {} no tiene 'external_reference'. Ignorando.", paymentId);
+                log.error("Payment {} has no 'external_reference'. Ignoring.", paymentId);
                 return;
             }
 
             // 2. Buscamos el registro local en nuestra DB
-            com.bidcast.billing_service.payment.Payment localPayment = 
-                paymentRepository.findById(java.util.UUID.fromString(externalReference))
-                    .orElseThrow(() -> new RuntimeException("Pago no encontrado para external_reference: " + externalReference));
+            UUID localPaymentId;
+            try {
+                localPaymentId = UUID.fromString(externalReference);
+            } catch (IllegalArgumentException e) {
+                log.warn("Payment {} has an invalid external_reference: {}", paymentId, externalReference);
+                return;
+            }
+
+            // Si el pago no nació en nuestro sistema, ignoramos el evento sin romper el flujo de MP.
+            Optional<com.bidcast.billing_service.payment.Payment> localPaymentOptional = paymentRepository.findById(localPaymentId);
+            if (localPaymentOptional.isEmpty()) {
+                log.warn("No local payment exists for external_reference={}. Ignoring webhook.", externalReference);
+                return;
+            }
+
+            com.bidcast.billing_service.payment.Payment localPayment = localPaymentOptional.get();
 
             // 3. IDEMPOTENCIA: Si ya está aprobado, salimos inmediatamente.
             if (localPayment.getStatus() == PaymentStatus.APPROVED) {
-                log.info("Pago {} ya estaba procesado (APPROVED). No hacemos nada.", externalReference);
+                log.info("Payment {} was already processed (APPROVED). No action taken.", externalReference);
                 return;
             }
 
             // 4. Si el pago está aprobado en MP, actualizamos y disparamos crédito
             if ("approved".equalsIgnoreCase(mpPayment.getStatus())) {
-                log.info("Pago {} verificado como APROBADO en MP.", paymentId);
+                log.info("Payment {} verified as APPROVED in Mercado Pago.", paymentId);
                 
                 localPayment.setStatus(PaymentStatus.APPROVED);
                 localPayment.setMpPaymentId(paymentId);
@@ -70,19 +91,21 @@ public class WebhookService {
                         event
                 );
                 
-                log.info("Crédito de {} enviado a RabbitMQ para advertiser: {}", 
+                log.info("Credit of {} sent to RabbitMQ for advertiser: {}", 
                          localPayment.getAmount(), localPayment.getAdvertiserId());
 
             } else {
-                log.warn("El pago {} tiene estado {} en MP. No se acredita saldo.", 
+                log.warn("Payment {} has status {} in Mercado Pago. No balance will be credited.", 
                          paymentId, mpPayment.getStatus());
             }
 
         } catch (org.springframework.orm.ObjectOptimisticLockingFailureException e) {
-            log.warn("Colisión de concurrencia detectada para el pago {}. Ya procesado.", paymentId);
+            log.warn("Concurrency collision detected for payment {}. Already processed.", paymentId);
+        } catch (NumberFormatException e) {
+            log.warn("Webhook ignored: invalid paymentId={}", paymentId);
         } catch (Exception e) {
-            log.error("Error crítico procesando webhook {}: {}", paymentId, e.getMessage());
-            throw new RuntimeException("Error en procesamiento de webhook", e);
+            log.error("Critical error while processing webhook {}: {}", paymentId, e.getMessage());
+            throw new RuntimeException("Webhook processing error", e);
         }
     }
 }

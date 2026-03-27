@@ -37,7 +37,7 @@ public class Campaign {
 
     @Builder.Default
     @Column(nullable = false, precision = 12, scale = 4)
-    private BigDecimal spent = BigDecimal.ZERO;
+    private BigDecimal spent = BigDecimal.ZERO; // todavia no lo uso
 
     @Column(nullable = false, precision = 12, scale = 4)
     private BigDecimal bidCpm;

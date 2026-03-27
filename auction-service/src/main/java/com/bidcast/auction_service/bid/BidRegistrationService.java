@@ -2,6 +2,7 @@ package com.bidcast.auction_service.bid;
 
 import com.bidcast.auction_service.client.WalletClient;
 import com.bidcast.auction_service.client.WalletFreezeRequest;
+import com.bidcast.auction_service.core.exception.SessionInactiveException;
 import com.bidcast.auction_service.core.exception.WalletCommunicationException;
 import com.bidcast.auction_service.session.SessionService;
 import lombok.RequiredArgsConstructor;
@@ -9,7 +10,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 /**
- * ORQUESTADOR: Registro y Activación de Pujas en Redis (Única Fuente Hot).
+ * servicio para el registro y activación de Pujas en Redis (Única Fuente Hot).
  */
 @Service
 @RequiredArgsConstructor
@@ -22,11 +23,15 @@ public class BidRegistrationService {
     private final WalletClient walletClient;
     private final SessionService sessionService;
 
+    // metodo para registrar un bid
+    // mini saga (compensitory), ya que estamos tocando db del wallet service, hay que tener en cuenta 
+    // y lograr una transaccion distribuida
     public SessionBid registerBid(BidRegistrationRequest request) {
-        log.info("Registrando puja para anunciante {} en sesión {}", request.advertiserId(), request.sessionId());
+        log.info("Registering bid for advertiser {} in session {}", request.advertiserId(), request.sessionId());
 
+        // si la session no esta activa throw error
         if (!sessionService.isSessionActive(request.sessionId())) {
-            throw new IllegalArgumentException("La sesión no existe o ya fue cerrada");
+            throw new SessionInactiveException("The session does not exist or has already been closed");
         }
 
         // 1. Guardar en DB (Cold Data)
@@ -39,12 +44,12 @@ public class BidRegistrationService {
                     request.advertiserId(),
                     request.totalBudget(),
                     referenceId,
-                    "Reserva para sesión " + request.sessionId()
+                    "Reservation for session " + request.sessionId()
             ));
         } catch (Exception e) {
-            log.error("Error al congelar fondos para el bid {}. Cancelando registro.", bid.getId());
+            log.error("Failed to freeze funds for bid {}. Cancelling registration.", bid.getId());
             persistenceService.updateStatus(bid.getId(), BidStatus.FAILED);
-            throw new WalletCommunicationException("Fallo en la comunicación con el Wallet Service");
+            throw new WalletCommunicationException("Wallet service communication failure");
         }
 
         // 3. Activación e Inyección en Redis (Hot Data)
@@ -58,23 +63,24 @@ public class BidRegistrationService {
             return activeBid;
 
         } catch (Exception e) {
-            log.error("Fallo crítico en infraestructura para bid {}. Ejecutando compensación...", bid.getId(), e);
+            log.error("Critical infrastructure failure for bid {}. Running compensation...", bid.getId(), e);
             handleImmediateFailure(bid, referenceId);
-            throw new RuntimeException("Error interno: los fondos fueron devueltos al anunciante.");
+            throw new RuntimeException("Internal error: funds were returned to the advertiser.");
         }
     }
 
+    // metodo privado por si tenemos que recompensar y "unfrezzseamos" lo que habiamos freezeado
     private void handleImmediateFailure(SessionBid bid, String referenceId) {
         try {
             walletClient.unfreeze(new WalletFreezeRequest(
                     bid.getAdvertiserId(),
                     bid.getTotalBudget(),
                     referenceId,
-                    "Reversión por fallo de infraestructura"
+                    "Rollback due to infrastructure failure"
             ));
             persistenceService.updateStatus(bid.getId(), BidStatus.FAILED);
         } catch (Exception ex) {
-            log.error("ALERTA ROJA: No se pudo realizar el unfreeze para el bid {}. Estado: FAILED_CRITICAL", bid.getId());
+            log.error("CRITICAL ALERT: Failed to unfreeze bid {}. Status: FAILED_CRITICAL", bid.getId());
             persistenceService.updateStatus(bid.getId(), BidStatus.FAILED_CRITICAL);
         }
     }

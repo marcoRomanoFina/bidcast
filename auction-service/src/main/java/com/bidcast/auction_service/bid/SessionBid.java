@@ -11,10 +11,12 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
 
+// Entidad de un Bid de session para un Advertiser
 @Entity
 @Table(
     name = "session_bids",
     indexes = {
+        // indice para buscar rapido
         @Index(name = "idx_session_bid_lookup", columnList = "sessionId, status")
     }
 )
@@ -30,25 +32,25 @@ public class SessionBid {
     private UUID id;
 
     @Column(nullable = false)
-    @NotBlank(message = "Session ID es obligatorio")
+    @NotBlank(message = "Session id is required")
     private String sessionId;
 
     @Column(nullable = false)
-    @NotBlank(message = "Advertiser ID es obligatorio")
+    @NotBlank(message = "Advertiser id is required")
     private String advertiserId;
 
     @Column(nullable = false)
-    @NotBlank(message = "Campaign ID es obligatorio")
+    @NotBlank(message = "Campaign id is required")
     private String campaignId;
 
     @Column(nullable = false, precision = 19, scale = 4)
-    @NotNull(message = "El presupuesto total es obligatorio")
-    @Positive(message = "El presupuesto total debe ser positivo")
+    @NotNull(message = "Total budget is required")
+    @Positive(message = "Total budget must be positive")
     private BigDecimal totalBudget;
 
     @Column(nullable = false, precision = 19, scale = 4)
-    @NotNull(message = "El precio de puja del anunciante es obligatorio")
-    @Positive(message = "El precio de puja debe ser positivo")
+    @NotNull(message = "Advertiser bid price is required")
+    @Positive(message = "Advertiser bid price must be positive")
     private BigDecimal advertiserBidPrice;
 
     @Column(nullable = false)

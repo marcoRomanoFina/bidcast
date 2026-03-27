@@ -7,6 +7,7 @@ import static org.mockito.Mockito.when;
 
 import java.util.Optional;
 import java.util.UUID;
+import java.util.List;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -113,5 +114,31 @@ class DeviceServiceTest {
         assertThatThrownBy(() -> deviceService.deleteDevice(id))
             .isInstanceOf(DeviceNotFoundException.class)
             .hasMessageContaining(id.toString());
+    }
+
+    @Test
+    void getDevicesByOwner_returnsMappedList() {
+        UUID ownerId = UUID.randomUUID();
+
+        Device first = Device.builder()
+            .id(UUID.randomUUID())
+            .ownerId(ownerId)
+            .deviceName("Screen A")
+            .build();
+
+        Device second = Device.builder()
+            .id(UUID.randomUUID())
+            .ownerId(ownerId)
+            .deviceName("Screen B")
+            .build();
+
+        when(deviceRepository.findByOwnerId(ownerId)).thenReturn(List.of(first, second));
+
+        List<DeviceResponse> result = deviceService.getDevicesByOwner(ownerId);
+
+        assertThat(result).hasSize(2);
+        assertThat(result).extracting(DeviceResponse::getDeviceName)
+            .containsExactly("Screen A", "Screen B");
+        verify(deviceRepository).findByOwnerId(ownerId);
     }
 }

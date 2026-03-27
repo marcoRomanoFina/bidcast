@@ -16,10 +16,10 @@ import lombok.NoArgsConstructor;
 @Builder
 public class CreateDeviceRequest {
 
-    @NotNull(message = "el owner ID es obligatorio")
+    @NotNull(message = "Owner ID is required")
     private UUID ownerId;
 
-    @NotBlank(message = "el nombre no puede estar vacio")
-    @Size(min = 3, max = 100, message = "el nombre debe tener entre 3 y 100 caracteres")
+    @NotBlank(message = "Device name must not be blank")
+    @Size(min = 3, max = 100, message = "Device name must be between 3 and 100 characters")
     private String deviceName;
 }

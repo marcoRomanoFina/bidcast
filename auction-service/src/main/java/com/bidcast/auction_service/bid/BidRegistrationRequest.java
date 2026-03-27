@@ -3,24 +3,25 @@ package com.bidcast.auction_service.bid;
 import jakarta.validation.constraints.*;
 import java.math.BigDecimal;
 
+// DTO para el registro de un Bid
 public record BidRegistrationRequest(
-    @NotBlank(message = "El ID de sesión es obligatorio")
+    @NotBlank(message = "Session id is required")
     String sessionId,
     
-    @NotBlank(message = "El ID del anunciante es obligatorio")
+    @NotBlank(message = "Advertiser id is required")
     String advertiserId,
     
-    @NotBlank(message = "El ID de la campaña es obligatorio")
+    @NotBlank(message = "Campaign id is required")
     String campaignId,
     
-    @NotNull(message = "El presupuesto total es obligatorio")
-    @Positive(message = "El presupuesto total debe ser positivo")
+    @NotNull(message = "Total budget is required")
+    @Positive(message = "Total budget must be positive")
     BigDecimal totalBudget,
     
-    @NotNull(message = "El precio de puja es obligatorio")
-    @Positive(message = "El precio de puja debe ser positivo")
+    @NotNull(message = "Bid price is required")
+    @Positive(message = "Bid price must be positive")
     BigDecimal advertiserBidPrice,
     
-    @NotBlank(message = "La URL del anuncio es obligatoria")
+    @NotBlank(message = "Ad media URL is required")
     String mediaUrl
 ) {}

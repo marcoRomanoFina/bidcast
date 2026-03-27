@@ -7,9 +7,11 @@ import io.jsonwebtoken.security.Keys;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import reactor.core.publisher.Mono;
+import reactor.test.StepVerifier;
+
 import javax.crypto.SecretKey;
 import java.util.Date;
-import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -29,11 +31,12 @@ class JwtValidatorTest {
         String token = createToken("test-user", 60000); // 1 minute expiry
 
         // WHEN
-        Optional<Claims> claimsOptional = jwtValidator.validateAndExtract(token);
+        Mono<Claims> result = jwtValidator.validateAndExtract(token);
 
         // THEN
-        assertTrue(claimsOptional.isPresent());
-        assertEquals("test-user", claimsOptional.get().getSubject());
+        StepVerifier.create(result)
+                .assertNext(claims -> assertEquals("test-user", claims.getSubject()))
+                .verifyComplete();
     }
 
     @Test
@@ -42,10 +45,11 @@ class JwtValidatorTest {
         String expiredToken = createToken("expired-user", -60000); // Expired 1 minute ago
 
         // WHEN
-        Optional<Claims> claimsOptional = jwtValidator.validateAndExtract(expiredToken);
+        Mono<Claims> result = jwtValidator.validateAndExtract(expiredToken);
 
         // THEN
-        assertTrue(claimsOptional.isEmpty());
+        StepVerifier.create(result)
+                .verifyComplete();
     }
 
     @Test
@@ -54,10 +58,11 @@ class JwtValidatorTest {
         String invalidToken = "invalid.token.string";
 
         // WHEN
-        Optional<Claims> claimsOptional = jwtValidator.validateAndExtract(invalidToken);
+        Mono<Claims> result = jwtValidator.validateAndExtract(invalidToken);
 
         // THEN
-        assertTrue(claimsOptional.isEmpty());
+        StepVerifier.create(result)
+                .verifyComplete();
     }
 
     private String createToken(String subject, long expirationMillis) {

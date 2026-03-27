@@ -1,6 +1,6 @@
 package com.bidcast.auction_service.pop;
 
-import com.bidcast.auction_service.TestcontainersConfiguration;
+import com.bidcast.auction_service.BaseIntegrationTest;
 import com.bidcast.auction_service.bid.BidStatus;
 import com.bidcast.auction_service.bid.SessionBid;
 import com.bidcast.auction_service.bid.SessionBidRepository;
@@ -14,9 +14,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.context.annotation.Import;
 import org.springframework.data.redis.core.StringRedisTemplate;
-import org.testcontainers.junit.jupiter.Testcontainers;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -26,31 +24,17 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 @SpringBootTest
-@Import(TestcontainersConfiguration.class)
-@Testcontainers
-class RehydrationIntegrationTest {
+class RehydrationIntegrationTest extends BaseIntegrationTest {
 
-    @Autowired
-    private ProofOfPlayService proofOfPlayService;
+    @Autowired private ProofOfPlayService proofOfPlayService;
+    @Autowired private SessionBidRepository bidRepository;
+    @Autowired private ProofOfPlayRepository popRepository;
+    @Autowired private DeviceSessionRepository sessionRepository;
+    @Autowired private StringRedisTemplate redisTemplate;
+    @Autowired private ReceiptTokenService tokenService;
+    @Autowired private ObjectMapper objectMapper;
 
-    @Autowired
-    private SessionBidRepository bidRepository;
-
-    @Autowired
-    private ProofOfPlayRepository popRepository;
-
-    @Autowired
-    private DeviceSessionRepository sessionRepository;
-
-    @Autowired
-    private StringRedisTemplate redisTemplate;
-
-    @Autowired
-    private ReceiptTokenService tokenService;
-
-    @Autowired
-    private ObjectMapper objectMapper;
-
+     
     private String sessionId;
     private SessionBid activeBid;
 
@@ -94,21 +78,21 @@ class RehydrationIntegrationTest {
         }
 
         String bidId = activeBid.getId().toString();
-        String metadataKey = String.format("session:%s:bid:%s:metadata", sessionId, bidId);
+        String bidKey = String.format("session:%s:bid:%s", sessionId, bidId);
         String sessionSetKey = String.format("session:%s:active_bids", sessionId);
         
-        redisTemplate.opsForValue().set(metadataKey, objectMapper.writeValueAsString(activeBid));
+        redisTemplate.opsForHash().put(bidKey, "metadata", objectMapper.writeValueAsString(com.bidcast.auction_service.bid.BidMetadata.fromEntity(activeBid)));
         redisTemplate.opsForSet().add(sessionSetKey, bidId);
 
-        String budgetKey = String.format("session:%s:bid:%s:budget", sessionId, bidId);
-        redisTemplate.delete(budgetKey);
+        // Borramos el Hash completo o solo el budget para forzar la rehidratación
+        redisTemplate.opsForHash().delete(bidKey, "budget");
 
         String receiptId = tokenService.generateReceiptId(sessionId, activeBid.getId(), "adv-1", BigDecimal.valueOf(10.00));
         PopRequest request = new PopRequest(sessionId, activeBid.getId().toString(), receiptId);
         
         proofOfPlayService.recordPlay(request);
 
-        String remainingCents = redisTemplate.opsForValue().get(budgetKey);
+        String remainingCents = (String) redisTemplate.opsForHash().get(bidKey, "budget");
         
         assertNotNull(remainingCents);
         assertEquals("6000", remainingCents);

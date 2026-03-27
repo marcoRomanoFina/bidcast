@@ -8,6 +8,9 @@ import org.hibernate.annotations.CreationTimestamp;
 
 import java.time.Instant;
 
+
+// entidad que representa una session
+
 @Entity
 @Table(
     name = "device_sessions",
@@ -23,20 +26,20 @@ import java.time.Instant;
 public class DeviceSession {
 
     @Id
-    @NotBlank(message = "El ID de sesión no puede estar vacío")
+    @NotBlank(message = "Session id must not be blank")
     private String sessionId;
 
     @Column(nullable = false)
-    @NotBlank(message = "El ID del dispositivo es obligatorio")
+    @NotBlank(message = "Device id is required")
     private String deviceId;
 
     @Column(nullable = false)
-    @NotBlank(message = "El ID del publisher es obligatorio")
+    @NotBlank(message = "Publisher id is required")
     private String publisherId;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
-    @NotNull(message = "El estado de la sesión es obligatorio")
+    @NotNull(message = "Session status is required")
     private SessionStatus status;
 
     @CreationTimestamp

@@ -1,8 +1,9 @@
 package com.bidcast.wallet_service.event;
 
 import com.bidcast.wallet_service.charge.SessionSettlementService;
+import com.bidcast.wallet_service.charge.dto.SessionSettlementCommand;
 import com.bidcast.wallet_service.config.RabbitMQConfig;
-import com.bidcast.wallet_service.dto.SessionSettlementCommand;
+
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -19,7 +20,7 @@ public class SettlementEventListener {
 
     @RabbitListener(queues = RabbitMQConfig.QUEUE_SESSION_SETTLEMENT)
     public void handleSessionSettlement(@Payload @Valid SessionSettlementCommand command) {
-        log.info("Recibido comando de liquidación para la puja: {}", command.bidId());
+        log.info("Settlement command received for bid: {}", command.bidId());
         sessionSettlementService.processSettlement(command);
     }
 }

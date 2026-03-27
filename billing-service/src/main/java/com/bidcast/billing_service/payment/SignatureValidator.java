@@ -8,6 +8,7 @@ import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import java.nio.charset.StandardCharsets;
 import java.security.InvalidKeyException;
+import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 
 @Component
@@ -17,36 +18,52 @@ public class SignatureValidator {
     @Value("${mercadopago.webhook.secret}")
     private String webhookSecret;
 
-    public boolean isValid(String xSignature, String xRequestId, String queryParams) {
-        if (xSignature == null || xRequestId == null || webhookSecret == null) {
+    public boolean isValid(String xSignature, String xRequestId, String dataId) {
+        if (xSignature == null || xRequestId == null || webhookSecret == null || dataId == null) {
+            log.warn("Missing required parameters to validate the Mercado Pago signature");
             return false;
         }
 
         try {
-            // El formato de x-signature de MP es: ts=TIMESTAMP;v1=HASH
-            // Para simplificar en el MVP, buscaremos la firma v1
-            String[] parts = xSignature.split(",");
-            String ts = "";
-            String v1 = "";
-            
-            for (String part : parts) {
-                if (part.contains("ts=")) ts = part.split("=")[1];
-                if (part.contains("v1=")) v1 = part.split("=")[1];
+            // El formato de x-signature de MP es: ts=TIMESTAMP,v1=HASH
+            String ts = extractValue(xSignature, "ts=");
+            String v1 = extractValue(xSignature, "v1=");
+
+            if (ts.isEmpty() || v1.isEmpty()) {
+                log.warn("Invalid x-signature format: {}", xSignature);
+                return false;
             }
 
-            // El string a firmar según la documentación oficial de MP V2:
-            // "id:" + id_del_recurso + ";request-id:" + x-request-id + ";ts:" + ts + ";"
-            // Nota: Mercado Pago está migrando formatos, esta es la validación robusta:
-            String manifest = String.format("id:%s;request-id:%s;ts:%s;", queryParams, xRequestId, ts);
+            // El string a firmar según MP V2:
+            // "id:[data.id];request-id:[x-request-id];ts:[ts];"
+            String manifest = String.format("id:%s;request-id:%s;ts:%s;", dataId, xRequestId, ts);
             
             String generatedHash = hmacSha256(manifest, webhookSecret);
             
-            return generatedHash.equals(v1);
+           
+            return MessageDigest.isEqual(
+                    generatedHash.getBytes(StandardCharsets.UTF_8), 
+                    v1.getBytes(StandardCharsets.UTF_8)
+            );
 
         } catch (Exception e) {
-            log.error("Error validando firma de Mercado Pago: {}", e.getMessage());
+            log.error("Cryptographic error while validating Mercado Pago signature: {}", e.getMessage());
             return false;
         }
+    }
+
+    /**
+     * Extrae de forma segura el valor de un key=value dentro del header
+     */
+    private String extractValue(String header, String prefix) {
+        String[] parts = header.split(",");
+        for (String part : parts) {
+            String trimmedPart = part.trim();
+            if (trimmedPart.startsWith(prefix) && trimmedPart.length() > prefix.length()) {
+                return trimmedPart.substring(prefix.length());
+            }
+        }
+        return "";
     }
 
     private String hmacSha256(String data, String key) throws NoSuchAlgorithmException, InvalidKeyException {

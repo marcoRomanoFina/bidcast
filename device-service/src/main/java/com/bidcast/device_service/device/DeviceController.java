@@ -36,8 +36,7 @@ public class DeviceController {
         return deviceService.createDevice(request);
     }
 
-    @
-    GetMapping("/{id}")
+    @GetMapping("/{id}")
     public DeviceResponse getDeviceById(@PathVariable UUID id){
         return deviceService.getDeviceById(id);
     }

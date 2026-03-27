@@ -4,12 +4,14 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.bidcast.user_service.user.User;
+import com.bidcast.user_service.user.UserRole;
 import io.jsonwebtoken.JwtException;
-import java.util.Collections;
+
+import java.util.Set;
+import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.security.core.userdetails.User;
-import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.test.util.ReflectionTestUtils;
 
 class JwtServiceTest {
@@ -26,9 +28,18 @@ class JwtServiceTest {
         ReflectionTestUtils.setField(jwtService, "jwtExpiration", 60_000L);
     }
 
+    private User createDomainUser() {
+        return User.builder()
+                .id(UUID.randomUUID())
+                .email("test@bidcast.com")
+                .password("pw")
+                .roles(Set.of(UserRole.ADVERTISER))
+                .build();
+    }
+
     @Test
     void generateToken_and_extractUsername() {
-        UserDetails user = new User("test@bidcast.com", "pw", Collections.emptyList());
+        User user = createDomainUser();
         String token = jwtService.generateToken(user);
 
         assertEquals("test@bidcast.com", jwtService.extractUsername(token));
@@ -36,7 +47,7 @@ class JwtServiceTest {
 
     @Test
     void isTokenValid_whenValid_returnsTrue() {
-        UserDetails user = new User("test@bidcast.com", "pw", Collections.emptyList());
+        User user = createDomainUser();
         String token = jwtService.generateToken(user);
 
         assertTrue(jwtService.isTokenValid(token, user));
@@ -44,7 +55,7 @@ class JwtServiceTest {
 
     @Test
     void isTokenValid_whenExpired_throws() {
-        UserDetails user = new User("test@bidcast.com", "pw", Collections.emptyList());
+        User user = createDomainUser();
         ReflectionTestUtils.setField(jwtService, "jwtExpiration", -1L);
         String token = jwtService.generateToken(user);
 
@@ -53,7 +64,7 @@ class JwtServiceTest {
 
     @Test
     void extractUsername_whenSignatureInvalid_throws() {
-        UserDetails user = new User("test@bidcast.com", "pw", Collections.emptyList());
+        User user = createDomainUser();
         String token = jwtService.generateToken(user);
 
         JwtService otherService = new JwtService();

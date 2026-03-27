@@ -8,7 +8,7 @@ import org.springframework.http.HttpStatus;
  */
 public class BidSettlementException extends AuctionDomainException {
     public BidSettlementException(String bidId, String reason) {
-        super(String.format("Error al liquidar la puja %s: %s", bidId, reason), 
+        super(String.format("Error settling bid %s: %s", bidId, reason), 
               HttpStatus.INTERNAL_SERVER_ERROR);
     }
 }

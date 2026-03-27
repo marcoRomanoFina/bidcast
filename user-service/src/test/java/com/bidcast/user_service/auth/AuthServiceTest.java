@@ -1,6 +1,7 @@
 package com.bidcast.user_service.auth;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
@@ -23,6 +24,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -75,6 +77,7 @@ class AuthServiceTest {
         );
         when(userRepository.findByEmail(request.email())).thenReturn(Optional.empty());
         when(passwordEncoder.encode(request.password())).thenReturn("hashed");
+        when(userRepository.save(any(User.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(jwtService.generateToken(any(User.class))).thenReturn("jwt-token");
 
         AuthResponse response = authService.register(request);
@@ -87,6 +90,25 @@ class AuthServiceTest {
         assertEquals("test@bidcast.com", saved.getEmail());
         assertEquals("hashed", saved.getPassword());
         assertEquals(Set.of(UserRole.ADVERTISER), saved.getRoles());
+    }
+
+    @Test
+    void register_whenSaveFailsWithDataIntegrity_translatesToDuplicate() {
+        UserRegisterRequest request = new UserRegisterRequest(
+                "Test User",
+                "test@bidcast.com",
+                "secret123",
+                Set.of(UserRole.ADVERTISER)
+        );
+        when(userRepository.findByEmail(request.email())).thenReturn(Optional.empty());
+        when(passwordEncoder.encode(request.password())).thenReturn("hashed");
+        when(userRepository.save(any(User.class))).thenThrow(new DataIntegrityViolationException("duplicate"));
+
+        DuplicateResourceException exception =
+                assertThrows(DuplicateResourceException.class, () -> authService.register(request));
+
+        assertEquals("Email is already being processed or already exists", exception.getMessage());
+        verify(jwtService, never()).generateToken(any(User.class));
     }
 
     @Test
@@ -106,6 +128,19 @@ class AuthServiceTest {
                 new UsernamePasswordAuthenticationToken(request.email(), request.password())
         );
         assertEquals("jwt-token", response.token());
+    }
+
+    @Test
+    void login_whenAuthenticatedButUserMissing_throwsBadCredentials() {
+        LoginRequest request = new LoginRequest("test@bidcast.com", "secret123");
+        when(userRepository.findByEmail(request.email())).thenReturn(Optional.empty());
+
+        BadCredentialsException exception =
+                assertThrows(BadCredentialsException.class, () -> authService.login(request));
+
+        assertInstanceOf(BadCredentialsException.class, exception);
+        assertEquals("Incorrect email or password", exception.getMessage());
+        verify(jwtService, never()).generateToken(any(User.class));
     }
 
     @Test

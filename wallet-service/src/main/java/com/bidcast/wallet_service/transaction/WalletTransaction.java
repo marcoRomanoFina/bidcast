@@ -12,10 +12,12 @@ import java.util.UUID;
 @Entity
 @Table(
         name = "ledger_entries",
+        uniqueConstraints = {
+                @UniqueConstraint(name = "uk_ledger_idempotency", columnNames = {"reference_id", "type"})
+        },
         indexes = {
                 @Index(name = "idx_ledger_wallet", columnList = "wallet_id"),
-                @Index(name = "idx_ledger_reference", columnList = "reference_type, reference_id"),
-                @Index(name = "idx_ledger_pop_charge", columnList = "proof_of_play_charge_id")
+                @Index(name = "idx_ledger_reference", columnList = "reference_type, reference_id")
         }
 )
 @Getter
@@ -40,6 +42,9 @@ public class WalletTransaction {
     @Column(name = "amount", nullable = false, precision = 12, scale = 4)
     private BigDecimal amount;
 
+    @Column(name = "balance_after", nullable = false, precision = 12, scale = 4)
+    private BigDecimal balanceAfter;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "type", nullable = false, length = 30)
     private WalletTransactionType type;
@@ -62,6 +67,7 @@ public class WalletTransaction {
         return WalletTransaction.builder()
                 .wallet(wallet)
                 .amount(amount.negate())
+                .balanceAfter(wallet.getBalance())
                 .type(WalletTransactionType.POP_CHARGE_ADVERTISER_DEBIT)
                 .referenceType("PROOF_OF_PLAY")
                 .referenceId(proofOfPlayId)
@@ -76,6 +82,7 @@ public class WalletTransaction {
         return WalletTransaction.builder()
                 .wallet(wallet)
                 .amount(amount)
+                .balanceAfter(wallet.getBalance())
                 .type(WalletTransactionType.POP_PUBLISHER_CREDIT)
                 .referenceType("PROOF_OF_PLAY")
                 .referenceId(proofOfPlayId)
@@ -90,6 +97,7 @@ public class WalletTransaction {
         return WalletTransaction.builder()
                 .wallet(wallet)
                 .amount(amount)
+                .balanceAfter(wallet.getBalance())
                 .type(WalletTransactionType.POP_PLATFORM_FEE)
                 .referenceType("PROOF_OF_PLAY")
                 .referenceId(proofOfPlayId)

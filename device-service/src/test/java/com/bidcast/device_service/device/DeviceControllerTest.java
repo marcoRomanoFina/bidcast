@@ -1,13 +1,17 @@
 package com.bidcast.device_service.device;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.UUID;
 
 import org.junit.jupiter.api.Test;
@@ -80,7 +84,7 @@ class DeviceControllerTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(body))
             .andExpect(status().isBadRequest())
-            .andExpect(jsonPath("$.message").value("el nombre debe tener entre 3 y 100 caracteres"));
+            .andExpect(jsonPath("$.message").value("Device name must be between 3 and 100 characters"));
     }
 
     @Test
@@ -112,11 +116,73 @@ class DeviceControllerTest {
         // Arrange: service lanza exception custom.
         UUID id = UUID.randomUUID();
         when(deviceService.getDeviceById(id))
-            .thenThrow(new DeviceNotFoundException("Dispositivo no encontrado: " + id));
+            .thenThrow(new DeviceNotFoundException("Device not found: " + id));
 
         // Act + Assert
         mockMvc.perform(get("/devices/{id}", id))
             .andExpect(status().isNotFound())
-            .andExpect(jsonPath("$.message").value("Dispositivo no encontrado: " + id));
+            .andExpect(jsonPath("$.message").value("Device not found: " + id));
+    }
+
+    @Test
+    void getDeviceById_invalidUuid_returns400() throws Exception {
+        mockMvc.perform(get("/devices/{id}", "uuid-invalido"))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.message").value("Invalid format for id"));
+    }
+
+    @Test
+    void deleteDevice_returnsNoContent() throws Exception {
+        UUID id = UUID.randomUUID();
+
+        mockMvc.perform(delete("/devices/{id}", id))
+            .andExpect(status().isNoContent());
+
+        verify(deviceService).deleteDevice(id);
+    }
+
+    @Test
+    void deleteDevice_notFound_returns404() throws Exception {
+        UUID id = UUID.randomUUID();
+        doThrow(new DeviceNotFoundException("Device not found: " + id))
+            .when(deviceService).deleteDevice(id);
+
+        mockMvc.perform(delete("/devices/{id}", id))
+            .andExpect(status().isNotFound())
+            .andExpect(jsonPath("$.message").value("Device not found: " + id));
+    }
+
+    @Test
+    void getDevicesByOwner_returnsList() throws Exception {
+        UUID ownerId = UUID.randomUUID();
+        DeviceResponse first = DeviceResponse.builder()
+            .id(UUID.randomUUID())
+            .ownerId(ownerId)
+            .deviceName("Display North")
+            .createdAt(LocalDateTime.now().minusDays(1))
+            .updatedAt(LocalDateTime.now())
+            .build();
+
+        DeviceResponse second = DeviceResponse.builder()
+            .id(UUID.randomUUID())
+            .ownerId(ownerId)
+            .deviceName("Display South")
+            .createdAt(LocalDateTime.now().minusHours(8))
+            .updatedAt(LocalDateTime.now())
+            .build();
+
+        when(deviceService.getDevicesByOwner(ownerId)).thenReturn(List.of(first, second));
+
+        mockMvc.perform(get("/devices/owner/{ownerId}", ownerId))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$[0].deviceName").value("Display North"))
+            .andExpect(jsonPath("$[1].deviceName").value("Display South"));
+    }
+
+    @Test
+    void getDevicesByOwner_invalidUuid_returns400() throws Exception {
+        mockMvc.perform(get("/devices/owner/{ownerId}", "uuid-invalido"))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.message").value("Invalid format for ownerId"));
     }
 }

@@ -8,9 +8,11 @@ import org.springframework.stereotype.Repository;
 import java.math.BigDecimal;
 import java.util.UUID;
 
+// queries para los PoP
 @Repository
 public interface ProofOfPlayRepository extends JpaRepository<ProofOfPlay, UUID> {
 
+    // para no devolver null y evitar un nullpointerEx
     @Query("SELECT COALESCE(SUM(p.costCharged), 0.0) FROM ProofOfPlay p WHERE p.bidId = :bidId")
     BigDecimal sumCostByBidId(@Param("bidId") String bidId);
 }

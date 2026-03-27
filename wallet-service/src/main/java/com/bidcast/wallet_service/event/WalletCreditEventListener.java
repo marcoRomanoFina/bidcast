@@ -1,15 +1,15 @@
 package com.bidcast.wallet_service.event;
 
 import com.bidcast.wallet_service.config.RabbitMQConfig;
+import com.bidcast.wallet_service.event.dto.WalletCreditMessage;
 import com.bidcast.wallet_service.wallet.WalletService;
 import com.bidcast.wallet_service.wallet.WalletOwnerType;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
+import org.springframework.messaging.handler.annotation.Payload;
 import org.springframework.stereotype.Component;
-
-import java.math.BigDecimal;
-import java.util.UUID;
 
 @Component
 @RequiredArgsConstructor
@@ -18,22 +18,29 @@ public class WalletCreditEventListener {
 
     private final WalletService walletService;
 
+    /**
+     * Listener para el evento de crédito (Top-up).
+     * Aplica validaciones de Bean Validation antes de procesar el mensaje.
+     */
     @RabbitListener(queues = RabbitMQConfig.QUEUE_CREDIT)
-    public void handleWalletCredit(WalletCreditMessage message) {
-        log.info("Recibido evento de crédito para anunciante {}: monto {}", message.advertiserId(), message.amount());
+    public void handleWalletCredit(@Payload @Valid WalletCreditMessage message) {
+        log.info("Credit event received for advertiser {}: amount {} - Ref: {}", 
+                message.advertiserId(), message.amount(), message.paymentId());
         
         try {
-            walletService.credit(message.advertiserId(), WalletOwnerType.ADVERTISER, message.amount());
-            log.info("Crédito realizado exitosamente para anunciante {}", message.advertiserId());
+            // El paymentId es nuestra clave de idempotencia
+            walletService.credit(
+                message.advertiserId(), 
+                WalletOwnerType.ADVERTISER, 
+                message.amount(), 
+                message.paymentId(),
+                "PAYMENT_TOPUP"
+            );
+            
+            log.info("Credit completed successfully for advertiser {}", message.advertiserId());
         } catch (Exception e) {
-            log.error("Error al procesar crédito de billetera: {}", e.getMessage());
+            log.error("Critical error while processing credit for {}: {}", 
+                    message.advertiserId(), e.getMessage());
         }
     }
-
-    public record WalletCreditMessage(
-        UUID advertiserId,
-        BigDecimal amount,
-        String paymentId,
-        String referenceId
-    ) {}
 }

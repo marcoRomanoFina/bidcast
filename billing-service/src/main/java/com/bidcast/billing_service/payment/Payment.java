@@ -23,7 +23,7 @@ public class Payment {
     private UUID id;
 
     @Version
-    private Long version; // Control de concurrencia
+    private Long version;
 
     @Column(nullable = false)
     private UUID advertiserId;

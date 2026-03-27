@@ -10,6 +10,8 @@ import org.springframework.amqp.rabbit.annotation.RabbitListener;
 import org.springframework.messaging.handler.annotation.Payload;
 import org.springframework.stereotype.Component;
 
+
+// listener para escuchar los eventos disparados por el device player (a implementar)
 @Component
 @RequiredArgsConstructor
 @Slf4j
@@ -20,13 +22,13 @@ public class SessionEventListener {
 
     @RabbitListener(queues = RabbitMQConfig.QUEUE_SESSION_STARTED)
     public void handleSessionStarted(@Payload @Valid SessionStartedEvent event) {
-        log.info("Recibido evento session.started para la sesión: {}", event.sessionId());
+        log.info("Received session.started event for session {}", event.sessionId());
         sessionService.startSession(event.sessionId(), event.deviceId(), event.publisherId());
     }
 
     @RabbitListener(queues = RabbitMQConfig.QUEUE_SESSION_CLOSED)
     public void handleSessionClosed(@Payload @Valid SessionClosedEvent event) {
-        log.info("Recibido evento session.closed para la sesión: {}", event.sessionId());
+        log.info("Received session.closed event for session {}", event.sessionId());
         sessionService.closeSession(event.sessionId());
         settlementOrchestrator.orchestrateSettlement(event.sessionId(), event.publisherId());
     }

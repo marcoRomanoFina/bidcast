@@ -18,13 +18,13 @@ public class MercadoPagoConfiguration {
 
     @PostConstruct
     public void init() {
-        log.info("Configurando SDK de Mercado Pago v2.8.0...");
+        log.info("Configuring Mercado Pago SDK v2.8.0...");
         
         MercadoPagoConfig.setAccessToken(accessToken);
         MercadoPagoConfig.setConnectionTimeout(5000); 
         MercadoPagoConfig.setConnectionRequestTimeout(5000);
-        // Nota: Si configurás retries en MP, asegurate de agregarlos acá si la librería lo soporta
-        log.info("SDK de Mercado Pago configurado con: Timeout=5s");
+    
+        log.info("Mercado Pago SDK configured with timeout=5s");
     }
 
     @Bean

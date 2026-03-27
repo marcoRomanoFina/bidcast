@@ -8,7 +8,7 @@ import org.springframework.http.HttpStatus;
  */
 public class SessionReconciliationException extends AuctionDomainException {
     public SessionReconciliationException(String sessionId, String reason) {
-        super(String.format("Error al reconciliar la sesión %s: %s", sessionId, reason), 
+        super(String.format("Error reconciling session %s: %s", sessionId, reason), 
               HttpStatus.INTERNAL_SERVER_ERROR);
     }
 }

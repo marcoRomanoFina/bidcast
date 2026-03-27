@@ -25,10 +25,10 @@ public class DeviceService {
      * Crea un dispositivo y lo persiste en la base de datos.
      */
     public DeviceResponse createDevice(CreateDeviceRequest request){
-        log.info("Iniciando creación de dispositivo. OwnerID: {}, Nombre: {}", request.getOwnerId(), request.getDeviceName());
+        log.info("Starting device creation. OwnerID: {}, Name: {}", request.getOwnerId(), request.getDeviceName());
         Device device = DeviceMapper.fromCreateRequest(request);
         Device saved = deviceRepository.save(device);
-        log.info("Dispositivo creado. DeviceID: {}, OwnerID: {}", saved.getId(), saved.getOwnerId());
+        log.info("Device created. DeviceID: {}, OwnerID: {}", saved.getId(), saved.getOwnerId());
         return DeviceMapper.toResponse(saved);
     }
 
@@ -36,9 +36,9 @@ public class DeviceService {
      * Obtiene todos los dispositivos asociados a un owner.
      */
     public List<DeviceResponse> getDevicesByOwner(UUID ownerId){
-        log.info("Buscando dispositivos por owner. OwnerID: {}", ownerId);
+        log.info("Searching devices by owner. OwnerID: {}", ownerId);
         List<Device> devices = deviceRepository.findByOwnerId(ownerId);
-        log.info("Dispositivos encontrados para owner. OwnerID: {}, Cantidad: {}", ownerId, devices.size());
+        log.info("Devices found for owner. OwnerID: {}, Count: {}", ownerId, devices.size());
         return devices.stream()
             .map(DeviceMapper::toResponse)
             .toList();
@@ -46,17 +46,15 @@ public class DeviceService {
 
     /**
      * Busca un dispositivo por ID.
-     * Lanza {@link com.bidcast.device_service.exception.DeviceNotFoundException}
-     * si no existe.
      */
     public DeviceResponse getDeviceById(UUID deviceId){
-        log.info("Buscando dispositivo por ID. DeviceID: {}", deviceId);
+        log.info("Searching device by ID. DeviceID: {}", deviceId);
         Device device = deviceRepository.findById(deviceId)
             .orElseThrow(() -> {
-                log.warn("Dispositivo no encontrado. DeviceID: {}", deviceId);
-                return new DeviceNotFoundException("Dispositivo no encontrado: " + deviceId);
+                log.warn("Device not found. DeviceID: {}", deviceId);
+                return new DeviceNotFoundException("Device not found: " + deviceId);
             });
-        log.info("Dispositivo encontrado. DeviceID: {}, OwnerID: {}", device.getId(), device.getOwnerId());
+        log.info("Device found. DeviceID: {}, OwnerID: {}", device.getId(), device.getOwnerId());
         return DeviceMapper.toResponse(device);
     }
 
@@ -66,13 +64,13 @@ public class DeviceService {
      * si no existe.
      */
     public void deleteDevice(UUID deviceId){
-        log.info("Eliminando dispositivo por ID. DeviceID: {}", deviceId);
+        log.info("Deleting device by ID. DeviceID: {}", deviceId);
         if (!deviceRepository.existsById(deviceId)) {
-            log.warn("No se puede eliminar: dispositivo no encontrado. DeviceID: {}", deviceId);
-            throw new DeviceNotFoundException("Dispositivo no encontrado: " + deviceId);
+            log.warn("Cannot delete: device not found. DeviceID: {}", deviceId);
+            throw new DeviceNotFoundException("Device not found: " + deviceId);
         }
         deviceRepository.deleteById(deviceId);
-        log.info("Dispositivo eliminado. DeviceID: {}", deviceId);
+        log.info("Device deleted. DeviceID: {}", deviceId);
     }
 
 }
