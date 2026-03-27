@@ -18,11 +18,13 @@ public class CampaignService {
 
     @Transactional
     public Campaign createCampaign(UUID advertiserId, CampaignRequest data) {
-        
-        log.info("Creando nueva campaña en estado DRAFT: {}", data.name());
+
+        String normalizedName = data.name().trim();
+
+        log.info("Creating campaign in DRAFT status: {}", data.name());
 
         Campaign campaign = Campaign.builder()
-                .name(data.name())
+                .name(normalizedName)
                 .advertiserId(advertiserId)
                 .budget(data.budget())
                 .bidCpm(data.bidCpm())
@@ -30,7 +32,7 @@ public class CampaignService {
                 .build();
 
         Campaign saved = campaignRepository.save(campaign);
-        log.info("Borrador guardado exitosamente con ID: {}", saved.getId());
+        log.info("Campaign draft stored successfully with id={}", saved.getId());
 
         return saved;
     }

@@ -6,27 +6,25 @@ import jakarta.validation.constraints.Positive;
 import java.math.BigDecimal;
 import java.util.UUID;
 
-/**
- * DTO optimizado para almacenamiento en Redis.
- * Incluye validaciones estrictas para asegurar la integridad de la subasta.
- */
+// Record para guardar la data escencial de un Bid para guardar en redis, asi ahorramos recursos
 public record BidMetadata(
-    @NotNull(message = "El ID del bid es obligatorio")
+    @NotNull(message = "Bid id is required")
     UUID id,
     
-    @NotBlank(message = "El ID del anunciante es obligatorio")
+    @NotBlank(message = "Advertiser id is required")
     String advertiserId,
     
-    @NotBlank(message = "El ID de la campaña es obligatorio")
+    @NotBlank(message = "Campaign id is required")
     String campaignId,
     
-    @NotNull(message = "El precio de puja es obligatorio")
-    @Positive(message = "El precio de puja debe ser positivo")
+    @NotNull(message = "Bid price is required")
+    @Positive(message = "Bid price must be positive")
     BigDecimal advertiserBidPrice,
     
-    @NotBlank(message = "La URL del anuncio es obligatoria")
+    @NotBlank(message = "Ad media URL is required")
     String mediaUrl
 ) {
+    // para pasarlo facil de entidad a metadata
     public static BidMetadata fromEntity(SessionBid bid) {
         return new BidMetadata(
             bid.getId(),

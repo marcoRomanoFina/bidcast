@@ -35,7 +35,7 @@ public class GlobalExceptionHandler {
     public ResponseEntity<Map<String, String>> handleBadCredentials(BadCredentialsException ex) {
         return ResponseEntity
                 .status(HttpStatus.UNAUTHORIZED) // 401
-                .body(Map.of("error", "Email o contraseña incorrectos"));
+                .body(Map.of("error", "Incorrect email or password"));
     }
 
     // 4. ERRORES DE VALIDACIÓN (Los @Email y @NotBlank de tus records)

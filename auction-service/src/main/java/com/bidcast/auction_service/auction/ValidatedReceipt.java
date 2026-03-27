@@ -5,14 +5,12 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 import java.math.BigDecimal;
 
-/**
- * Representa los datos extraídos y validados de un ticket de reproducción.
- */
+// record para devolver los datos de un PoP validaddo
 public record ValidatedReceipt(
-    @NotBlank(message = "El ID del anunciante no puede estar vacío")
+    @NotBlank(message = "Advertiser id must not be blank")
     String advertiserId, 
     
-    @NotNull(message = "El precio de la puja es obligatorio")
-    @Positive(message = "El precio de la puja debe ser positivo")
+    @NotNull(message = "Bid price is required")
+    @Positive(message = "Bid price must be positive")
     BigDecimal advertiserBidPrice
 ) {}

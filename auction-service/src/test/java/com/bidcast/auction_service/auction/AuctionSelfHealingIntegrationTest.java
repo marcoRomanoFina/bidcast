@@ -1,6 +1,6 @@
 package com.bidcast.auction_service.auction;
 
-import com.bidcast.auction_service.TestcontainersConfiguration;
+import com.bidcast.auction_service.BaseIntegrationTest;
 import com.bidcast.auction_service.bid.BidStatus;
 import com.bidcast.auction_service.bid.SessionBid;
 import com.bidcast.auction_service.bid.SessionBidRepository;
@@ -11,30 +11,23 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.data.redis.core.StringRedisTemplate;
-import org.testcontainers.junit.jupiter.Testcontainers;
 
 import java.math.BigDecimal;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-@SpringBootTest
-@Import(TestcontainersConfiguration.class)
-@Testcontainers
-class AuctionSelfHealingIntegrationTest {
+@Import(BaseIntegrationTest.RedissonTestConfig.class)
+class AuctionSelfHealingIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private AuctionEngine auctionEngine;
-
     @Autowired
     private SessionBidRepository bidRepository;
-
     @Autowired
     private DeviceSessionRepository sessionRepository;
-
     @Autowired
     private StringRedisTemplate redisTemplate;
 
@@ -71,7 +64,7 @@ class AuctionSelfHealingIntegrationTest {
         String sessionSetKey = String.format("session:%s:active_bids", sessionId);
         redisTemplate.delete(sessionSetKey);
 
-        AuctionResult result = auctionEngine.evaluateNext(sessionId);
+        WinningAd result = auctionEngine.evaluateNext(sessionId);
 
         assertTrue(result instanceof WinningAd);
         assertEquals(nikeBid.getId(), ((WinningAd) result).bidId());
@@ -83,17 +76,16 @@ class AuctionSelfHealingIntegrationTest {
     void shouldHealWhenMetadataIsMissing() {
         String bidId = nikeBid.getId().toString();
         String sessionSetKey = String.format("session:%s:active_bids", sessionId);
-        String metadataKey = String.format("session:%s:bid:%s:metadata", sessionId, bidId);
-        String budgetKey = String.format("session:%s:bid:%s:budget", sessionId, bidId);
+        String bidKey = String.format("session:%s:bid:%s", sessionId, bidId);
 
         redisTemplate.opsForSet().add(sessionSetKey, bidId);
-        redisTemplate.opsForValue().set(budgetKey, "10000");
-        redisTemplate.delete(metadataKey);
+        redisTemplate.opsForHash().put(bidKey, "budget", "10000");
 
-        AuctionResult result = auctionEngine.evaluateNext(sessionId);
+        WinningAd result = auctionEngine.evaluateNext(sessionId);
 
         assertTrue(result instanceof WinningAd);
-        assertEquals(nikeBid.getId(), ((WinningAd) result).bidId());
-        assertTrue(redisTemplate.hasKey(metadataKey));
+        WinningAd winner = (WinningAd) result;
+        assertEquals(nikeBid.getId(), winner.bidId());
+        assertTrue(redisTemplate.opsForHash().hasKey(bidKey, "metadata"));
     }
 }

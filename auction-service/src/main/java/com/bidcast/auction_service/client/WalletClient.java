@@ -6,6 +6,8 @@ import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
 
+// client para hablar con el wallet-service
+
 @Service
 @Slf4j
 public class WalletClient {
@@ -21,27 +23,27 @@ public class WalletClient {
     }
 
     public void freeze(WalletFreezeRequest request) {
-        log.debug("Llamando a congelamiento de billetera para el anunciante: {}", request.advertiserId());
+        log.debug("Calling wallet freeze for advertiser {}", request.advertiserId());
         restClient.post()
                 .uri(walletServiceUrl + "/api/v1/wallet/freeze")
                 .contentType(MediaType.APPLICATION_JSON)
                 .body(request)
                 .retrieve()
                 .onStatus(status -> status.is4xxClientError() || status.is5xxServerError(), (req, res) -> {
-                    throw new RuntimeException("Error en el servicio de billetera: " + res.getStatusCode());
+                    throw new RuntimeException("Wallet service error: " + res.getStatusCode());
                 })
                 .toBodilessEntity();
     }
 
     public void unfreeze(WalletFreezeRequest request) {
-        log.debug("Llamando a descongelamiento de billetera para el anunciante: {}", request.advertiserId());
+        log.debug("Calling wallet unfreeze for advertiser {}", request.advertiserId());
         restClient.post()
                 .uri(walletServiceUrl + "/api/v1/wallet/unfreeze")
                 .contentType(MediaType.APPLICATION_JSON)
                 .body(request)
                 .retrieve()
                 .onStatus(status -> status.is4xxClientError() || status.is5xxServerError(), (req, res) -> {
-                    throw new RuntimeException("Error en el servicio de billetera: " + res.getStatusCode());
+                    throw new RuntimeException("Wallet service error: " + res.getStatusCode());
                 })
                 .toBodilessEntity();
     }

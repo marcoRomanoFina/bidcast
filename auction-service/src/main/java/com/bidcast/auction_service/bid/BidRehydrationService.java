@@ -5,68 +5,64 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
-import java.math.BigDecimal;
-import java.util.Optional;
 import java.util.UUID;
 
 /**
- * RESPONSABILIDAD: Orquestación de la Sanación y Recuperación de Datos.
- * Coordina entre la persistencia (Postgres) y la infraestructura (Redis).
+ *  Este service es para la reconstrucción del estado en Redis ante fallos.
+ * Actúa como el puente de recuperación entre PostgreSQL y Redis.
  */
 @Service
 @RequiredArgsConstructor
 @Slf4j
 public class BidRehydrationService {
 
-    private final BidPersistenceService persistenceService;
     private final BidInfrastructureService infrastructureService;
-    private final ProofOfPlayRepository proofOfPlayRepository;
+    private final SessionBidRepository sessionBidRepository;
+    private final ProofOfPlayRepository popRepository;
 
     /**
-     * Reconstruye el estado de un bid individual en Redis.
-     * Devuelve el objeto restaurado completo para evitar consultas extra.
+     * Rehidrata un bid individual en Redis.
      */
     public RestoredBid rehydrateFullBid(UUID bidId) {
-        log.warn("Saneando infraestructura Redis para bid: {}", bidId);
-        
-        return persistenceService.findById(bidId)
+        return sessionBidRepository.findById(bidId)
                 .map(bid -> {
-                    long balance = this.calculateRealBalanceCents(bid);
-                    infrastructureService.injectIntoRedis(bid, balance);
-                    return new RestoredBid(BidMetadata.fromEntity(bid), balance);
+                    log.warn("Saneando infraestructura Redis para bid: {}", bidId);
+                    long balanceCents = calculateRealBalanceCents(bid);
+                    infrastructureService.injectIntoRedis(bid, balanceCents);
+                    return new RestoredBid(BidMetadata.fromEntity(bid), balanceCents);
                 })
-                .orElseThrow(() -> new RuntimeException("Imposible rehidratar: Bid no encontrado " + bidId));
+                .orElseThrow(() -> new RuntimeException("Bid not found for rehydration: " + bidId));
     }
 
     /**
-     * Reconstruye todos los bids activos de una sesión en Redis.
+     * Rehidrata todos los bids activos de una sesión.
      */
     public void rehydrateSession(String sessionId) {
-        log.warn("Disparando rehidratación masiva para sesión: {}", sessionId);
-        
-        persistenceService.findActiveBySession(sessionId)
+        log.info("Starting bulk rehydration for session {}", sessionId);
+        sessionBidRepository.findBySessionIdAndStatus(sessionId, BidStatus.ACTIVE)
                 .forEach(bid -> {
-                    long balance = this.calculateRealBalanceCents(bid);
-                    infrastructureService.injectIntoRedis(bid, balance);
+                    long balanceCents = calculateRealBalanceCents(bid);
+                    infrastructureService.injectIntoRedis(bid, balanceCents);
                 });
     }
 
     /**
-     * Consulta Postgres para obtener el saldo remanente real.
+     * Calcula el saldo real basado en Presupuesto Total - Gasto Registrado (PoPs).
      */
     public long calculateRealBalanceCents(SessionBid bid) {
-        BigDecimal spent = Optional.ofNullable(proofOfPlayRepository.sumCostByBidId(bid.getId().toString()))
-                .orElse(BigDecimal.ZERO);
-        BigDecimal remaining = bid.getTotalBudget().subtract(spent).max(BigDecimal.ZERO);
-        return remaining.multiply(new BigDecimal("100")).longValue();
+        // Obtenemos la suma de PoPs desde PostgreSQL (Source of Truth)
+        java.math.BigDecimal spent = popRepository.sumCostByBidId(bid.getId().toString());
+        
+        // El saldo real es: (Total - Gastado) convertido a centavos para Redis
+        return bid.getTotalBudget()
+                .subtract(spent)
+                .multiply(new java.math.BigDecimal("100"))
+                .longValue();
     }
 
-    /**
-     * Sobrecarga para obtener balance solo por UUID.
-     */
     public long calculateRealBalanceCents(UUID bidId) {
-        return persistenceService.findById(bidId)
+        return sessionBidRepository.findById(bidId)
                 .map(this::calculateRealBalanceCents)
-                .orElseThrow(() -> new RuntimeException("Bid no encontrado para cálculo de saldo: " + bidId));
+                .orElseThrow(() -> new RuntimeException("Bid not found for balance calculation: " + bidId));
     }
 }

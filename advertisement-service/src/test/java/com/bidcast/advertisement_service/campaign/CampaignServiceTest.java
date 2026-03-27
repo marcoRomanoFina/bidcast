@@ -66,5 +66,25 @@ public class CampaignServiceTest {
         assertEquals(request.budget(), capturedCampaign.getBudget());
         assertEquals(request.bidCpm(), capturedCampaign.getBidCpm());
         assertEquals(CampaignStatusType.DRAFT, capturedCampaign.getStatus());
+        assertEquals(BigDecimal.ZERO, capturedCampaign.getSpent());
+    }
+
+    @Test
+    void should_trimNameBeforeSaving_when_requestContainsOuterSpaces() {
+        UUID advertiserId = UUID.randomUUID();
+        CampaignRequest request = new CampaignRequest(
+                "  Campaña prolija  ",
+                new BigDecimal("5000.00"),
+                new BigDecimal("2.50")
+        );
+
+        when(campaignRepository.save(any(Campaign.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        campaignService.createCampaign(advertiserId, request);
+
+        ArgumentCaptor<Campaign> campaignCaptor = ArgumentCaptor.forClass(Campaign.class);
+        verify(campaignRepository).save(campaignCaptor.capture());
+
+        assertEquals("Campaña prolija", campaignCaptor.getValue().getName());
     }
 }

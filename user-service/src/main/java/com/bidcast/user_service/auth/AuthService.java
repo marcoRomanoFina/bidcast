@@ -10,6 +10,7 @@ import com.bidcast.user_service.user.UserRepository;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -24,24 +25,29 @@ public class AuthService {
     private final AuthenticationManager authenticationManager;
 
     public AuthResponse register(UserRegisterRequest request) {
-        // 1. Validamos que el email no exista con tu nueva excepción
+        // 1. Validación de existencia de Mail
         if (userRepository.findByEmail(request.email()).isPresent()) {
-            throw new DuplicateResourceException("El email ya está registrado en BidCast");
+            throw new DuplicateResourceException("Email is already registered in Bidcast");
         }
 
-        // 2. Armamos el usuario
-        var user = User.builder()
-                .fullName(request.fullName())
-                .email(request.email())
-                .password(passwordEncoder.encode(request.password()))
-                .roles(request.roles())
-                .build();
+        try {
+            // 2. Armado del usuario
+            var user = User.builder()
+                    .fullName(request.fullName())
+                    .email(request.email())
+                    .password(passwordEncoder.encode(request.password()))
+                    .roles(request.roles())
+                    .build();
 
-        // 3. Guardamos y generamos token
-        userRepository.save(user);
-        var jwtToken = jwtService.generateToken(user);
-        
-        return new AuthResponse(jwtToken);
+            // 3. Guardado y generación token
+            user = userRepository.save(user);
+            var jwtToken = jwtService.generateToken(user);
+            
+            return new AuthResponse(jwtToken);
+        } catch (org.springframework.dao.DataIntegrityViolationException e) {
+            // Captura atómica si el pre-check falló por concurrencia
+            throw new DuplicateResourceException("Email is already being processed or already exists");
+        }
     }
 
     public AuthResponse login(LoginRequest request) {
@@ -55,8 +61,10 @@ public class AuthService {
         );
 
         // 2. Si pasó, buscamos el usuario y generamos token
+        // Si el usuario desapareció entre la autenticación y la lectura, devolvemos el mismo
+        // contrato que para credenciales inválidas y evitamos filtrar inconsistencias internas.
         var user = userRepository.findByEmail(request.email())
-                .orElseThrow(); // Acá no debería fallar nunca porque ya pasó la autenticación
+                .orElseThrow(() -> new BadCredentialsException("Incorrect email or password"));
         
         var jwtToken = jwtService.generateToken(user);
         

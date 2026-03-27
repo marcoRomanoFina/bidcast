@@ -1,66 +1,175 @@
-# Bidcast - Real-Time Bidding Platform
+# Bidcast
 
-Plataforma AdTech y FinTech diseñada para la subasta de anuncios en tiempo real (RTB) sobre pantallas físicas, con un motor financiero integrado para la gestión de presupuestos y cobros automáticos.
+Bidcast is a personal microservices project inspired by AdTech real-time bidding systems.
+It connects advertisers, physical display devices, auctions, and internal financial flows in a distributed architecture designed to explore concurrency, consistency, idempotency, and service-to-service communication.
 
-## Arquitectura del Sistema
+The project is intentionally more infrastructure-heavy than a typical CRUD application. The goal was not just to "build features", but to work through the kinds of problems that appear when money, retries, distributed state, and asynchronous messaging all interact.
 
-El ecosistema está compuesto por microservicios desacoplados bajo una arquitectura Event-Driven:
+> Work in progress focused on distributed systems and backend engineering, not on shipping a polished end-user product.
 
-1.  **API Gateway**: Único punto de entrada reactivo (Spring Cloud Gateway). Centraliza la seguridad y el ruteo.
-2.  **User Service**: Gestión de identidades y roles (Advertiser, Publisher).
-3.  **Billing Service**: Integración con Mercado Pago, gestión de intenciones de pago y validación de webhooks.
-4.  **Wallet Service**: Ledger financiero interno. Procesa créditos y débitos en tiempo real.
-5.  **Advertisement Service**: Gestión de campañas, presupuestos y assets multimedia.
-6.  **Auction Service**: Motor de subastas de baja latencia (<100ms) que decide el anuncio ganador.
-7.  **Device Service**: Gestión de inventario de pantallas y telemetría de sesiones.
+## What This Project Explores
 
-## Flujo Crítico de Datos
+- real-time auction execution for ad delivery on physical screens
+- stateless authentication with JWT at the gateway edge
+- internal wallet and settlement flows with idempotency protections
+- external payment integration through Mercado Pago webhooks
+- asynchronous communication with RabbitMQ
+- distributed state and fast-path coordination with Redis
+- transactional boundaries, outbox delivery, and reconciliation jobs
+- unit, web, and integration testing with Testcontainers
 
-1.  **Carga de Saldo**: Anunciante paga vía Billing -> Webhook verificado -> Evento asíncrono (RabbitMQ) -> Wallet acredita saldo.
-2.  **Subasta**: Pantalla solicita anuncio -> Auction filtra campañas por presupuesto y puja -> Retorna ganador.
-3.  **Settlement**: Tras la reproducción -> Evento ProofOfPlay -> Wallet debita el costo de la puja del presupuesto del anunciante.
+## Architecture
 
-## Decisiones de Ingeniería y Seguridad
+Bidcast follows a service-oriented architecture with clear separation between identity, routing, auction execution, financial accounting, external billing, and inventory management.
 
-### 1. Integridad Financiera
-*   **Concurrencia**: Uso de Optimistic Locking (@Version) en las entidades de Payment y Wallet para prevenir el problema del doble crédito/débito en hilos simultáneos.
-*   **Precisión**: Uso estricto de java.math.BigDecimal con precisión configurada en base de datos para evitar errores de redondeo en transacciones.
+- PostgreSQL is used where auditability and transactional guarantees matter.
+- Redis is used for low-latency state, distributed coordination, and rate limiting.
+- RabbitMQ is used for cross-service event delivery.
 
-### 2. Blindaje del Gateway
-*   **Header Scrubbing**: El Gateway elimina cualquier header X-User-* entrante para prevenir el spoofing de identidad.
-*   **Verified Identity**: Solo el Gateway tiene permiso para inyectar headers de identidad tras validar el JWT, garantizando que los microservicios internos confíen ciegamente en la data recibida.
+### Services
 
-### 3. Idempotencia y Seguridad Criptográfica
-*   **Webhook Security**: Validación de firma HMAC-SHA256 (x-signature) en el microservicio de Billing para asegurar el origen de las notificaciones de pago.
-*   **Stateless Proof of Play**: El Auction Service emite tickets de reproducción firmados con HMAC-SHA256. Esto permite validar la integridad del cobro (anunciante y precio) sin necesidad de persistencia intermedia, protegiendo el sistema contra la manipulación de datos por parte de dispositivos externos.
-*   **Doble Check**: Verificación de estado previo (APPROVED) antes de procesar cualquier evento para garantizar la idempotencia financiera.
+- `gateway-service`: API gateway, JWT validation, RBAC, header normalization, rate limiting, CORS
+- `user-service`: registration, login, password hashing, JWT issuance
+- `device-service`: device inventory and owner-based lookup
+- `advertisement-service`: campaign creation and advertiser campaign management
+- `auction-service`: session bids, auction execution, proof-of-play validation, outbox-based settlement orchestration
+- `wallet-service`: internal ledger, credits, debits, frozen balance handling, settlement consumption
+- `billing-service`: Mercado Pago checkout preference creation and webhook reconciliation
 
-### 4. Calidad y Testing
-*   **Testcontainers**: Uso obligatorio de contenedores reales (PostgreSQL, RabbitMQ, Redis) para los tests de integración, garantizando que el comportamiento en desarrollo sea idéntico a producción.
+## Main Flow
 
-## Stack Tecnológico
-*   **Runtime**: Java 21 / Spring Boot 4.0.3
-*   **Broker**: RabbitMQ (AMQP)
-*   **Persistence**: PostgreSQL (Cold Data) / Redis (Hot Data & Rate Limiting)
-*   **Tools**: Docker & Docker Compose
+At a high level, the platform works like this:
 
-## Backlog Pendiente para MVP
+1. an advertiser registers and authenticates through `user-service`
+2. the `gateway-service` validates the JWT and forwards verified identity to internal services
+3. advertisers create campaigns and allocate budget
+4. devices participate in active sessions
+5. `auction-service` receives bids, selects a winner, and issues a receipt token
+6. when the ad is confirmed as displayed, proof of play is recorded
+7. settlement is published through the outbox and consumed by `wallet-service`
+8. wallet balance can be topped up through `billing-service`
 
-### 1. Rol de Administrador y Moderación
-*   **Gobierno de Contenido**: Implementación de un flujo de aprobación manual para campañas creadas por Advertisers antes de ser habilitadas en las subastas.
-*   **Gestión Operativa**: Endpoints protegidos para la supervisión de saldos totales del sistema y estados de conectividad de las pantallas.
+### Auction / Settlement Flow
 
-### 2. Microservicio de Device Player
-*   **Client Software**: Software ligero para la ejecución en hardware físico que gestione la descarga de media, el reporte de telemetría y la solicitud de anuncios al Auction Service.
+```mermaid
+sequenceDiagram
+    participant D as Device
+    participant A as Auction Service
+    participant W as Wallet Service
+    participant R as RabbitMQ
 
-### 3. Almacenamiento de Media
-*   **Asset Management**: Integración con servicios de almacenamiento de objetos (S3/Cloudinary) para la gestión escalable de videos e imágenes de alta resolución.
-
-### 4. Dashboard de Analíticas
-*   **Reporting**: Visualización en tiempo real para Anunciantes (gasto y alcance) y Publishers (ingresos y disponibilidad de pantallas).
-
-## Ejecución
-El ecosistema completo está diseñado para levantarse con una sola instrucción:
-```bash
-docker-compose up -d
+    D->>A: Request ad
+    A->>W: Freeze bid budget
+    W-->>A: Freeze accepted
+    A-->>D: Winning ad + receipt
+    D->>A: Proof of play
+    A->>A: Validate receipt and persist PoP
+    A->>R: Publish settlement event (outbox)
+    R-->>W: Debit frozen balance
 ```
+
+## Reliability Patterns
+
+The project includes several patterns that are common in systems where consistency and retries matter:
+
+- multi-layer idempotency using fast-path checks plus database constraints
+- optimistic locking and duplicate handling on financial flows
+- transactional outbox for durable event publication
+- reconciliation jobs for stale or incomplete distributed flows
+- signed receipt validation before final settlement
+- gateway-side identity shielding through trusted internal headers only
+- Redis-backed distributed rate limiting
+
+These choices are deliberate. Some are arguably overkill for a greenfield MVP, but they were included to force exposure to real backend trade-offs.
+
+## Tech Stack
+
+- Java 21
+- Spring Boot 4.0.3
+- Spring MVC and Spring Cloud Gateway WebFlux
+- Spring Security
+- PostgreSQL
+- Redis (Redisson)
+- RabbitMQ
+- JJWT
+- Testcontainers
+- Maven
+- Docker / Docker Compose
+
+## Repository Layout
+
+```text
+bidcast/
+├── gateway-service/
+├── user-service/
+├── device-service/
+├── advertisement-service/
+├── auction-service/
+├── wallet-service/
+├── billing-service/
+├── docker-compose.yml
+└── init.sql
+```
+
+Each service has its own `README.md` with implementation notes and testing details.(work in progress)
+
+## Running The Project
+
+### 1. Start infrastructure and available services
+
+The repository includes a root [`docker-compose.yml`](docker-compose.yml) that starts:
+
+- PostgreSQL
+- Redis
+- RabbitMQ
+- `gateway-service`
+- `user-service`
+- `wallet-service`
+- `auction-service`
+- `billing-service`
+
+Run:
+
+```bash
+docker compose up --build
+```
+
+Notes:
+
+- `device-service` and `advertisement-service` are currently documented and testable as standalone modules, but they are not yet wired into the root compose file.
+- copy `.env.example` to `.env` or export the required variables before starting the stack:
+
+```bash
+cp .env.example .env
+# then replace placeholder values where needed
+
+export JWT_SECRET_KEY=your_base64_jwt_secret
+export AUCTION_RECEIPT_SECRET=your_receipt_hmac_secret
+export MP_ACCESS_TOKEN=your_mercado_pago_access_token
+export MP_WEBHOOK_SECRET=your_mercado_pago_webhook_secret
+```
+
+### 2. Run a single service locally
+
+```bash
+cd user-service
+mvn spring-boot:run
+```
+
+Use the corresponding service `README` for required environment variables and endpoint details.
+
+## Testing
+
+The codebase uses a mix of:
+
+- unit tests for business rules and edge cases
+- web/controller tests for HTTP contracts
+- integration tests with Testcontainers for services that depend on PostgreSQL, Redis, or RabbitMQ
+
+Most service modules can be tested independently:
+
+```bash
+cd auction-service
+mvn test
+```
+Some integration suites require Docker Desktop or Docker Engine because they spin up real infrastructure with Testcontainers.

@@ -1,7 +1,12 @@
 image: maven:3.9.9-eclipse-temurin-21
 
+# Variables globales: Aplican a todos los jobs automáticamente
 variables:
   MAVEN_OPTS: "-Dmaven.repo.local=.m2/repository"
+  # Configuración esencial para Docker-in-Docker y Testcontainers
+  DOCKER_HOST: tcp://docker:2375
+  DOCKER_TLS_CERTDIR: ""
+  TESTCONTAINERS_HOST_OVERRIDE: "docker"
 
 cache:
   paths:
@@ -18,11 +23,9 @@ stages:
 device_test:
   stage: test
   services:
-    - name: postgres:17
-      alias: postgres
-  variables:
-    POSTGRES_PASSWORD: postgres
-    SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/devices_db
+    - name: docker:27-dind
+      alias: docker
+      command: ["--tls=false"]
   script:
     - cd device-service
     - mvn test
@@ -38,9 +41,7 @@ device_build:
   services:
     - name: docker:27-dind
       alias: docker
-  variables:
-    DOCKER_HOST: tcp://docker:2375
-    DOCKER_TLS_CERTDIR: ""
+      command: ["--tls=false"]
   script:
     - cd device-service
     - docker build -t bidcast/device-service .
@@ -53,7 +54,7 @@ device_deploy:
   stage: deploy
   needs: ["device_build"]
   script:
-    - echo "🚀 Desplegando Device Service (Simulado)..."
+    - echo "Desplegando Device Service (Simulado)..."
   rules:
     - if: $CI_COMMIT_BRANCH == "main"
       changes:
@@ -68,9 +69,7 @@ user_test:
   services:
     - name: docker:27-dind 
       alias: docker
-  variables:
-    DOCKER_HOST: tcp://docker:2375 
-    DOCKER_TLS_CERTDIR: "" 
+      command: ["--tls=false"]
   script:
     - cd user-service
     - mvn test
@@ -86,9 +85,7 @@ user_build:
   services:
     - name: docker:27-dind
       alias: docker
-  variables:
-    DOCKER_HOST: tcp://docker:2375
-    DOCKER_TLS_CERTDIR: ""
+      command: ["--tls=false"]
   script:
     - cd user-service
     - docker build -t bidcast/user-service .
@@ -101,7 +98,7 @@ user_deploy:
   stage: deploy
   needs: ["user_build"]
   script:
-    - echo "🚀 Desplegando User Service (Simulado)..."
+    - echo "Desplegando User Service (Simulado)..."
   rules:
     - if: $CI_COMMIT_BRANCH == "main"
       changes:
@@ -116,9 +113,7 @@ ad_test:
   services:
     - name: docker:27-dind 
       alias: docker
-  variables:
-    DOCKER_HOST: tcp://docker:2375 
-    DOCKER_TLS_CERTDIR: "" 
+      command: ["--tls=false"]
   script:
     - cd advertisement-service
     - mvn test 
@@ -134,9 +129,7 @@ ad_build:
   services:
     - name: docker:27-dind
       alias: docker
-  variables:
-    DOCKER_HOST: tcp://docker:2375
-    DOCKER_TLS_CERTDIR: ""
+      command: ["--tls=false"]
   script:
     - cd advertisement-service
     - docker build -t bidcast/advertisement-service .
@@ -149,7 +142,7 @@ ad_deploy:
   stage: deploy
   needs: ["ad_build"]
   script:
-    - echo "🚀 Desplegando Advertisement Service (Simulado)..."
+    - echo "Desplegando Advertisement Service (Simulado)..."
   rules:
     - if: $CI_COMMIT_BRANCH == "main"
       changes:
@@ -164,9 +157,7 @@ wallet_test:
   services:
     - name: docker:27-dind 
       alias: docker
-  variables:
-    DOCKER_HOST: tcp://docker:2375 
-    DOCKER_TLS_CERTDIR: "" 
+      command: ["--tls=false"]
   script:
     - cd wallet-service
     - mvn test 
@@ -182,9 +173,7 @@ wallet_build:
   services:
     - name: docker:27-dind
       alias: docker
-  variables:
-    DOCKER_HOST: tcp://docker:2375
-    DOCKER_TLS_CERTDIR: ""
+      command: ["--tls=false"]
   script:
     - cd wallet-service
     - docker build -t bidcast/wallet-service .
@@ -197,7 +186,7 @@ wallet_deploy:
   stage: deploy
   needs: ["wallet_build"]
   script:
-    - echo "🚀 Desplegando Wallet Service (Simulado)..."
+    - echo "Desplegando Wallet Service (Simulado)..."
   rules:
     - if: $CI_COMMIT_BRANCH == "main"
       changes:
@@ -212,9 +201,7 @@ auction_test:
   services:
     - name: docker:27-dind 
       alias: docker
-  variables:
-    DOCKER_HOST: tcp://docker:2375 
-    DOCKER_TLS_CERTDIR: "" 
+      command: ["--tls=false"]
   script:
     - cd auction-service
     - mvn test 
@@ -230,9 +217,7 @@ auction_build:
   services:
     - name: docker:27-dind
       alias: docker
-  variables:
-    DOCKER_HOST: tcp://docker:2375
-    DOCKER_TLS_CERTDIR: ""
+      command: ["--tls=false"]
   script:
     - cd auction-service
     - docker build -t bidcast/auction-service .
@@ -245,7 +230,7 @@ auction_deploy:
   stage: deploy
   needs: ["auction_build"]
   script:
-    - echo "🚀 Desplegando Auction Service (Simulado)..."
+    - echo "Desplegando Auction Service (Simulado)..."
   rules:
     - if: $CI_COMMIT_BRANCH == "main"
       changes:
@@ -261,9 +246,7 @@ gateway_build:
   services:
     - name: docker:27-dind
       alias: docker
-  variables:
-    DOCKER_HOST: tcp://docker:2375
-    DOCKER_TLS_CERTDIR: ""
+      command: ["--tls=false"]
   script:
     - cd gateway-service
     - docker build -t bidcast/gateway-service .
@@ -276,7 +259,7 @@ gateway_deploy:
   stage: deploy
   needs: ["gateway_build"]
   script:
-    - echo "🚀 Desplegando Gateway Service (Simulado)..."
+    - echo "Desplegando Gateway Service (Simulado)..."
   rules:
     - if: $CI_COMMIT_BRANCH == "main"
       changes:
@@ -291,9 +274,7 @@ billing_test:
   services:
     - name: docker:27-dind 
       alias: docker
-  variables:
-    DOCKER_HOST: tcp://docker:2375 
-    DOCKER_TLS_CERTDIR: "" 
+      command: ["--tls=false"]
   script:
     - cd billing-service
     - mvn test 
@@ -309,9 +290,7 @@ billing_build:
   services:
     - name: docker:27-dind
       alias: docker
-  variables:
-    DOCKER_HOST: tcp://docker:2375
-    DOCKER_TLS_CERTDIR: ""
+      command: ["--tls=false"]
   script:
     - cd billing-service
     - docker build -t bidcast/billing-service .
@@ -324,7 +303,7 @@ billing_deploy:
   stage: deploy
   needs: ["billing_build"]
   script:
-    - echo "🚀 Desplegando Billing Service (Simulado)..."
+    - echo "Desplegando Billing Service (Simulado)..."
   rules:
     - if: $CI_COMMIT_BRANCH == "main"
       changes:

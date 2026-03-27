@@ -1,6 +1,6 @@
 package com.bidcast.auction_service.pop;
 
-import com.bidcast.auction_service.TestcontainersConfiguration;
+import com.bidcast.auction_service.BaseIntegrationTest;
 import com.bidcast.auction_service.bid.BidStatus;
 import com.bidcast.auction_service.bid.SessionBid;
 import com.bidcast.auction_service.bid.SessionBidRepository;
@@ -12,10 +12,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.data.redis.core.StringRedisTemplate;
-import org.testcontainers.junit.jupiter.Testcontainers;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
@@ -27,28 +25,15 @@ import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-@SpringBootTest
-@Import(TestcontainersConfiguration.class)
-@Testcontainers
-class ProofOfPlayServiceIntegrationTest {
+@Import(BaseIntegrationTest.RedissonTestConfig.class)
+class ProofOfPlayServiceIntegrationTest extends BaseIntegrationTest {
 
-    @Autowired
-    private ProofOfPlayService proofOfPlayService;
-
-    @Autowired
-    private SessionBidRepository bidRepository;
-
-    @Autowired
-    private DeviceSessionRepository sessionRepository;
-
-    @Autowired
-    private StringRedisTemplate redisTemplate;
-
-    @Autowired
-    private ReceiptTokenService tokenService;
-
-    @Autowired
-    private ObjectMapper objectMapper;
+    @Autowired private ProofOfPlayService proofOfPlayService;
+    @Autowired private SessionBidRepository bidRepository;
+    @Autowired private DeviceSessionRepository sessionRepository;
+    @Autowired private StringRedisTemplate redisTemplate;
+    @Autowired private ReceiptTokenService tokenService;
+    @Autowired private ObjectMapper objectMapper;
 
     @Test
     @DisplayName("CONCURRENCIA HORIZONTAL: 10 pantallas distintas cobrando al mismo tiempo")
@@ -82,12 +67,11 @@ class ProofOfPlayServiceIntegrationTest {
             createdBids.add(bid);
 
             String bidId = bid.getId().toString();
-            String budgetKey = String.format("session:%s:bid:%s:budget", sid, bidId);
-            String metadataKey = String.format("session:%s:bid:%s:metadata", sid, bidId);
+            String bidKey = String.format("session:%s:bid:%s", sid, bidId);
             String sessionSetKey = String.format("session:%s:active_bids", sid);
 
-            redisTemplate.opsForValue().set(budgetKey, "100");
-            redisTemplate.opsForValue().set(metadataKey, objectMapper.writeValueAsString(bid));
+            redisTemplate.opsForHash().put(bidKey, "budget", "100");
+            redisTemplate.opsForHash().put(bidKey, "metadata", objectMapper.writeValueAsString(com.bidcast.auction_service.bid.BidMetadata.fromEntity(bid)));
             redisTemplate.opsForSet().add(sessionSetKey, bidId);
         }
 
@@ -113,8 +97,8 @@ class ProofOfPlayServiceIntegrationTest {
         latch.await(15, TimeUnit.SECONDS);
 
         for (SessionBid bid : createdBids) {
-            String budgetKey = String.format("session:%s:bid:%s:budget", bid.getSessionId(), bid.getId());
-            String remainingCents = redisTemplate.opsForValue().get(budgetKey);
+            String bidKey = String.format("session:%s:bid:%s", bid.getSessionId(), bid.getId());
+            String remainingCents = (String) redisTemplate.opsForHash().get(bidKey, "budget");
             assertEquals("90", remainingCents);
         }
     }

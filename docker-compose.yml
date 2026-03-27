@@ -4,8 +4,8 @@ services:
     container_name: bidcast-postgres
     environment:
       POSTGRES_DB: bidcast
-      POSTGRES_USER: user
-      POSTGRES_PASSWORD: password
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
     ports:
       - "5432:5432"
     volumes:
@@ -18,8 +18,8 @@ services:
       - "5672:5672"
       - "15672:15672"
     environment:
-      RABBITMQ_DEFAULT_USER: guest
-      RABBITMQ_DEFAULT_PASS: guest
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_DEFAULT_USER:-guest}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS:-guest}
 
   redis:
     image: redis:7-alpine
@@ -38,7 +38,7 @@ services:
       - SPRING_PROFILES_ACTIVE=dev
       - SPRING_DATA_REDIS_HOST=redis
       - SPRING_DATA_REDIS_PORT=6379
-      - JWT_SECRET_KEY=2UHjkWZU0VNZZeDuGsBZdmYWk8zBbSodnpk/WhB3zOY=
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
     depends_on:
       - redis
 
@@ -47,9 +47,14 @@ services:
       context: ./user-service
       dockerfile: Dockerfile
     container_name: bidcast-user
+    ports:
+      - "8081:8081"
     environment:
       - SPRING_PROFILES_ACTIVE=dev
-      - JWT_SECRET_KEY=2UHjkWZU0VNZZeDuGsBZdmYWk8zBbSodnpk/WhB3zOY=
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/bidcast
+      - SPRING_DATASOURCE_USERNAME=${POSTGRES_USER:-postgres}
+      - SPRING_DATASOURCE_PASSWORD=${POSTGRES_PASSWORD:-postgres}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
     depends_on:
       - postgres
 
@@ -58,8 +63,16 @@ services:
       context: ./wallet-service
       dockerfile: Dockerfile
     container_name: bidcast-wallet
+    ports:
+      - "8083:8083"
     environment:
       - SPRING_PROFILES_ACTIVE=dev
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/bidcast
+      - SPRING_DATASOURCE_USERNAME=${POSTGRES_USER:-postgres}
+      - SPRING_DATASOURCE_PASSWORD=${POSTGRES_PASSWORD:-postgres}
+      - SPRING_RABBITMQ_HOST=rabbitmq
+      - SPRING_RABBITMQ_USERNAME=${RABBITMQ_DEFAULT_USER:-guest}
+      - SPRING_RABBITMQ_PASSWORD=${RABBITMQ_DEFAULT_PASS:-guest}
     depends_on:
       - postgres
       - rabbitmq
@@ -69,41 +82,40 @@ services:
       context: ./auction-service
       dockerfile: Dockerfile
     container_name: bidcast-auction
+    ports:
+      - "8084:8084"
     environment:
       - SPRING_PROFILES_ACTIVE=dev
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/bidcast
+      - SPRING_DATASOURCE_USERNAME=${POSTGRES_USER:-postgres}
+      - SPRING_DATASOURCE_PASSWORD=${POSTGRES_PASSWORD:-postgres}
+      - SPRING_DATA_REDIS_HOST=redis
+      - SPRING_RABBITMQ_HOST=rabbitmq
+      - SPRING_RABBITMQ_USERNAME=${RABBITMQ_DEFAULT_USER:-guest}
+      - SPRING_RABBITMQ_PASSWORD=${RABBITMQ_DEFAULT_PASS:-guest}
+      - AUCTION_RECEIPT_SECRET=${AUCTION_RECEIPT_SECRET}
     depends_on:
       - postgres
       - redis
       - rabbitmq
-
-  advertisement-service:
-    build:
-      context: ./advertisement-service
-      dockerfile: Dockerfile
-    container_name: bidcast-advertisement
-    environment:
-      - SPRING_PROFILES_ACTIVE=dev
-    depends_on:
-      - postgres
-
-  device-service:
-    build:
-      context: ./device-service
-      dockerfile: Dockerfile
-    container_name: bidcast-device
-    environment:
-      - SPRING_PROFILES_ACTIVE=dev
-    depends_on:
-      - postgres
 
   billing-service:
     build:
       context: ./billing-service
       dockerfile: Dockerfile
     container_name: bidcast-billing
+    ports:
+      - "8086:8086"
     environment:
       - SPRING_PROFILES_ACTIVE=dev
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/bidcast
+      - SPRING_DATASOURCE_USERNAME=${POSTGRES_USER:-postgres}
+      - SPRING_DATASOURCE_PASSWORD=${POSTGRES_PASSWORD:-postgres}
+      - SPRING_RABBITMQ_HOST=rabbitmq
+      - SPRING_RABBITMQ_USERNAME=${RABBITMQ_DEFAULT_USER:-guest}
+      - SPRING_RABBITMQ_PASSWORD=${RABBITMQ_DEFAULT_PASS:-guest}
       - MP_ACCESS_TOKEN=${MP_ACCESS_TOKEN}
+      - MP_WEBHOOK_SECRET=${MP_WEBHOOK_SECRET}
     depends_on:
       - postgres
       - rabbitmq

@@ -37,7 +37,7 @@ public class PaymentPreferenceService {
     private String notificationUrl;
 
     public String createPaymentPreference(PaymentPreferenceRequest request) {
-        log.info("Creando preferencia de pago para el anunciante: {}", request.advertiserId());
+        log.info("Creating payment preference for advertiser: {}", request.advertiserId());
 
         // 1. Guardamos el registro de pago pendiente en nuestra DB
         // Nota: save() de JpaRepository ya es transaccional por defecto.
@@ -49,13 +49,12 @@ public class PaymentPreferenceService {
         payment = paymentRepository.save(payment);
 
         try {
-            // 2. Usamos el cliente inyectado (ahora es un @Bean gestionado por Spring)
             
             // 3. Creamos el item (la recarga de saldo)
             List<PreferenceItemRequest> items = new ArrayList<>();
             PreferenceItemRequest item = PreferenceItemRequest.builder()
                     .id(payment.getId().toString()) // Referencia a nuestra DB
-                    .title(request.description() != null ? request.description() : "Recarga de saldo Bidcast")
+                    .title(request.description() != null ? request.description() : "Bidcast balance top-up")
                     .quantity(1)
                     .unitPrice(request.amount())
                     .currencyId("ARS")
@@ -84,12 +83,12 @@ public class PaymentPreferenceService {
             payment.setMpPreferenceId(preference.getId());
             paymentRepository.save(payment);
 
-            log.info("Preferencia creada exitosamente en MP: {}", preference.getId());
+            log.info("Payment preference created successfully in Mercado Pago: {}", preference.getId());
             return preference.getInitPoint(); // Devolvemos la URL para que el usuario pague
 
         } catch (MPException | MPApiException e) {
-            log.error("Error al crear preferencia en Mercado Pago: {}", e.getMessage());
-            throw new RuntimeException("Error al procesar el pago con Mercado Pago", e);
+            log.error("Error while creating Mercado Pago preference: {}", e.getMessage());
+            throw new RuntimeException("Error while processing payment with Mercado Pago", e);
         }
     }
 }

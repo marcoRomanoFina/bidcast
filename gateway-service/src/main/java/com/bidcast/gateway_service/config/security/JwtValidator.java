@@ -7,11 +7,13 @@ import io.jsonwebtoken.security.Keys;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
+import reactor.core.publisher.Mono;
+
 import javax.crypto.SecretKey;
-import java.util.Optional;
 
 /**
- * Validador Stateless de JWT.
+ * Validador reactivo y sin estado (stateless) para tokens JWT.
+ * Se encarga de verificar la firma y extraer los claims de identidad
  */
 @Component
 public class JwtValidator {
@@ -22,19 +24,23 @@ public class JwtValidator {
         this.secretKey = secretKey;
     }
 
-    public Optional<Claims> validateAndExtract(String token) {
-        try {
-            Claims claims = Jwts.parser()
+    /**
+     * Valida la integridad del token y extrae su contenido de forma no bloqueante.
+     * @param token El JWT recibido en el header Authorization.
+     * @return Un Mono que emite los Claims si es válido, o un Mono vacío si hay error o expiración.
+     */
+    public Mono<Claims> validateAndExtract(String token) {
+        return Mono.fromCallable(() -> Jwts.parser()
                     .verifyWith(getSignInKey())
                     .build()
                     .parseSignedClaims(token)
-                    .getPayload();
-            return Optional.of(claims);
-        } catch (Exception e) {
-            return Optional.empty();
-        }
+                    .getPayload())
+                .onErrorResume(e -> Mono.empty());
     }
 
+    /**
+     * Reconstruye la clave de firma a partir del secreto configurado.
+     */
     private SecretKey getSignInKey() {
         byte[] keyBytes = Decoders.BASE64.decode(secretKey);
         return Keys.hmacShaKeyFor(keyBytes);

@@ -11,13 +11,14 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
 
+
+// entidad que representa el PoP
 @Entity
 @Table(
     name = "proof_of_plays",
     indexes = {
-        @Index(name = "idx_pop_session_bid", columnList = "sessionId, bidId"),
-        @Index(name = "idx_pop_bid_lookup", columnList = "bidId"),
-        @Index(name = "idx_pop_receipt", columnList = "playReceiptId")
+        @Index(name = "idx_pop_bid_session", columnList = "bidId, sessionId"),
+        @Index(name = "idx_pop_budget_sum", columnList = "bidId, costCharged")
     }
 )
 @Getter

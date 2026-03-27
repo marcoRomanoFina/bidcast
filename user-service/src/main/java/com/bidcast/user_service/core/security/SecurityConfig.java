@@ -17,16 +17,13 @@ public class SecurityConfig {
 
     private final AuthenticationProvider authenticationProvider;
 
-    /**
-     * El microservicio ahora confía en que el API Gateway ya validó la identidad del usuario.
-     * Mantenemos la sesión STATELESS y permitimos el acceso, delegando la protección al Gateway.
-     */
+
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
             .csrf(AbstractHttpConfigurer::disable)
             .authorizeHttpRequests(auth -> auth
-                .anyRequest().permitAll() // El "Patovica" está ahora en el Gateway
+                .anyRequest().permitAll() 
             )
             .sessionManagement(session -> session
                 .sessionCreationPolicy(SessionCreationPolicy.STATELESS)

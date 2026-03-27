@@ -14,6 +14,8 @@ import org.springframework.test.web.servlet.MockMvc;
 import java.math.BigDecimal;
 import java.util.UUID;
 
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -31,6 +33,38 @@ class CampaignControllerTest {
     private CampaignService campaignService;
 
     @Test
+    void should_return201Created_when_requestIsValid() throws Exception {
+        UUID advertiserId = UUID.randomUUID();
+        CampaignRequest request = new CampaignRequest(
+                "Campaña Verano",
+                new BigDecimal("1500.00"),
+                new BigDecimal("3.50")
+        );
+
+        Campaign savedCampaign = Campaign.builder()
+                .id(UUID.randomUUID())
+                .name(request.name())
+                .advertiserId(advertiserId)
+                .budget(request.budget())
+                .spent(BigDecimal.ZERO)
+                .bidCpm(request.bidCpm())
+                .status(CampaignStatusType.DRAFT)
+                .build();
+
+        when(campaignService.createCampaign(eq(advertiserId), eq(request))).thenReturn(savedCampaign);
+
+        mockMvc.perform(post("/api/campaigns")
+                        .header("X-User-Id", advertiserId.toString())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.id").value(savedCampaign.getId().toString()))
+                .andExpect(jsonPath("$.advertiserId").value(advertiserId.toString()))
+                .andExpect(jsonPath("$.name").value("Campaña Verano"))
+                .andExpect(jsonPath("$.status").value("DRAFT"));
+    }
+
+    @Test
     void should_return400BadRequest_when_requestHasInvalidData() throws Exception {
         // Arrange
         UUID advertiserId = UUID.randomUUID();
@@ -42,17 +76,48 @@ class CampaignControllerTest {
 
         // Act & Assert
         mockMvc.perform(post("/api/campaigns")
-                        .header("X-Advertiser-Id", advertiserId.toString())
+                        .header("X-User-Id", advertiserId.toString())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(invalidRequest)))
                 
                 // Aseguramos que devuelva HTTP 400
                 .andExpect(status().isBadRequest())
                 
-                // Verificamos que tu Map<String, String> traiga las claves correctas que fallaron
+                // Verificamos que Map<String, String> traiga las claves correctas que fallaron
                 .andExpect(jsonPath("$.name").exists())
                 .andExpect(jsonPath("$.budget").exists())
                 .andExpect(jsonPath("$.bidCpm").exists())
                 .andExpect(jsonPath("$.length()").value(3));
+    }
+
+    @Test
+    void should_return400BadRequest_when_userHeaderIsMissing() throws Exception {
+        CampaignRequest request = new CampaignRequest(
+                "Campaña Header",
+                new BigDecimal("1000.00"),
+                new BigDecimal("2.00")
+        );
+
+        mockMvc.perform(post("/api/campaigns")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.['X-User-Id']").value("Header is required"));
+    }
+
+    @Test
+    void should_return400BadRequest_when_userHeaderHasInvalidUuid() throws Exception {
+        CampaignRequest request = new CampaignRequest(
+                "Campaña Header",
+                new BigDecimal("1000.00"),
+                new BigDecimal("2.00")
+        );
+
+        mockMvc.perform(post("/api/campaigns")
+                        .header("X-User-Id", "not-a-uuid")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.['X-User-Id']").value("Invalid format"));
     }
 }

@@ -10,6 +10,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.Map;
+import java.util.Objects;
 
 @RestController
 @RequestMapping("/api/v1/billing")
@@ -45,21 +46,27 @@ public class PaymentController {
     ) {
         // Determinamos el ID del pago (MP lo manda de formas distintas según la versión)
         String finalId = (dataId != null) ? dataId : id;
+        boolean paymentNotification = Objects.equals("payment", topic) || Objects.equals("payment", type);
         
-        log.info("Webhook recibido: topic={}, type={}, id={}, x-signature={}", topic, type, finalId, signature);
+        log.info("Webhook received: topic={}, type={}, id={}, x-signature={}", topic, type, finalId, signature);
 
-        // --- VALIDACIÓN DE FIRMA (Shield) ---
+        if (paymentNotification && (finalId == null || finalId.isBlank())) {
+            log.warn("Payment webhook ignored: missing payment identifier");
+            return ResponseEntity.status(HttpStatus.CREATED).build();
+        }
+
+        
         // En desarrollo/MVP permitimos saltar la firma si el secreto es el dummy por defecto
         if (!"dummy_secret_for_dev".equals(webhookSecret)) {
             if (!signatureValidator.isValid(signature, requestId, finalId)) {
-                log.error("Firma de Webhook INVÁLIDA. Posible intento de fraude para el pago {}", finalId);
+                log.error("Invalid webhook signature. Possible fraud attempt for payment {}", finalId);
                 return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
             }
         } else {
-            log.warn("Saltando validación de firma de Webhook (MODO DESARROLLO)");
+            log.warn("Skipping webhook signature validation (DEVELOPMENT MODE)");
         }
 
-        // --- PROCESAMIENTO ---
+      
         // MP manda notificaciones por varios temas, solo nos importa 'payment'
         if ("payment".equals(topic) || "payment".equals(type)) {
             webhookService.processNotification(finalId);

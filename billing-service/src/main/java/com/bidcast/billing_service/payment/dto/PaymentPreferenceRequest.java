@@ -9,11 +9,11 @@ import java.util.UUID;
  * Solicitud para generar un link de pago de recarga.
  */
 public record PaymentPreferenceRequest(
-    @NotNull(message = "El ID del anunciante es obligatorio")
+    @NotNull(message = "Advertiser ID is required")
     UUID advertiserId,
 
-    @NotNull(message = "El monto es obligatorio")
-    @Positive(message = "El monto debe ser positivo")
+    @NotNull(message = "Amount is required")
+    @Positive(message = "Amount must be positive")
     BigDecimal amount,
 
     String description
