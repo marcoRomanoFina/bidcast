@@ -2,9 +2,6 @@ image: maven:3.9.9-eclipse-temurin-21
 
 variables:
   MAVEN_OPTS: "-Dmaven.repo.local=.m2/repository"
-  DOCKER_HOST: tcp://docker:2375
-  DOCKER_TLS_CERTDIR: ""
-  TESTCONTAINERS_HOST_OVERRIDE: "docker"
 
 cache:
   paths:
@@ -20,10 +17,6 @@ stages:
 # ==========================================
 device_test:
   stage: test
-  services:
-    - name: docker:27-dind
-      alias: docker
-      command: ["--tls=false"]
   script:
     - cd device-service
     - mvn test
@@ -36,10 +29,7 @@ device_build:
   stage: build
   needs: ["device_test"]
   image: docker:27
-  services:
-    - name: docker:27-dind
-      alias: docker
-      command: ["--tls=false"]
+  # ELIMINAMOS EL BLOQUE 'services:' DE DIND
   script:
     - cd device-service
     - docker build -t bidcast/device-service .
@@ -64,10 +54,6 @@ device_deploy:
 # ==========================================
 user_test:
   stage: test
-  services:
-    - name: docker:27-dind 
-      alias: docker
-      command: ["--tls=false"]
   script:
     - cd user-service
     - mvn test
@@ -80,10 +66,6 @@ user_build:
   stage: build
   needs: ["user_test"]
   image: docker:27
-  services:
-    - name: docker:27-dind
-      alias: docker
-      command: ["--tls=false"]
   script:
     - cd user-service
     - docker build -t bidcast/user-service .
@@ -108,10 +90,6 @@ user_deploy:
 # ==========================================
 ad_test:
   stage: test
-  services:
-    - name: docker:27-dind 
-      alias: docker
-      command: ["--tls=false"]
   script:
     - cd advertisement-service
     - mvn test 
@@ -124,10 +102,6 @@ ad_build:
   stage: build
   needs: ["ad_test"]
   image: docker:27
-  services:
-    - name: docker:27-dind
-      alias: docker
-      command: ["--tls=false"]
   script:
     - cd advertisement-service
     - docker build -t bidcast/advertisement-service .
@@ -152,10 +126,6 @@ ad_deploy:
 # ==========================================
 wallet_test:
   stage: test
-  services:
-    - name: docker:27-dind 
-      alias: docker
-      command: ["--tls=false"]
   script:
     - cd wallet-service
     - mvn test 
@@ -168,10 +138,6 @@ wallet_build:
   stage: build
   needs: ["wallet_test"]
   image: docker:27
-  services:
-    - name: docker:27-dind
-      alias: docker
-      command: ["--tls=false"]
   script:
     - cd wallet-service
     - docker build -t bidcast/wallet-service .
@@ -196,10 +162,6 @@ wallet_deploy:
 # ==========================================
 auction_test:
   stage: test
-  services:
-    - name: docker:27-dind 
-      alias: docker
-      command: ["--tls=false"]
   script:
     - cd auction-service
     - mvn test 
@@ -212,10 +174,6 @@ auction_build:
   stage: build
   needs: ["auction_test"]
   image: docker:27
-  services:
-    - name: docker:27-dind
-      alias: docker
-      command: ["--tls=false"]
   script:
     - cd auction-service
     - docker build -t bidcast/auction-service .
@@ -238,13 +196,19 @@ auction_deploy:
 # ==========================================
 # GATEWAY SERVICE
 # ==========================================
+gateway_test:
+  stage: test
+  script:
+    - cd gateway-service
+    - mvn test 
+  rules:
+    - changes:
+        - gateway-service/**/*
+        - .gitlab-ci.yml
+        
 gateway_build:
   stage: build
   image: docker:27
-  services:
-    - name: docker:27-dind
-      alias: docker
-      command: ["--tls=false"]
   script:
     - cd gateway-service
     - docker build -t bidcast/gateway-service .
@@ -269,10 +233,6 @@ gateway_deploy:
 # ==========================================
 billing_test:
   stage: test
-  services:
-    - name: docker:27-dind 
-      alias: docker
-      command: ["--tls=false"]
   script:
     - cd billing-service
     - mvn test 
@@ -285,10 +245,6 @@ billing_build:
   stage: build
   needs: ["billing_test"]
   image: docker:27
-  services:
-    - name: docker:27-dind
-      alias: docker
-      command: ["--tls=false"]
   script:
     - cd billing-service
     - docker build -t bidcast/billing-service .
