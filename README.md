@@ -134,27 +134,6 @@ Run:
 docker compose up --build
 ```
 
-Notes:
-
-- `device-service` and `advertisement-service` are currently documented and testable as standalone modules, but they are not yet wired into the root compose file.
-- copy `.env.example` to `.env` or export the required variables before starting the stack:
-
-```bash
-cp .env.example .env
-# then replace placeholder values where needed
-
-export JWT_SECRET_KEY=your_base64_jwt_secret
-export AUCTION_RECEIPT_SECRET=your_receipt_hmac_secret
-export MP_ACCESS_TOKEN=your_mercado_pago_access_token
-export MP_WEBHOOK_SECRET=your_mercado_pago_webhook_secret
-```
-
-### 2. Run a single service locally
-
-```bash
-cd user-service
-mvn spring-boot:run
-```
 
 Use the corresponding service `README` for required environment variables and endpoint details.
 

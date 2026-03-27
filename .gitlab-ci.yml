@@ -1,9 +1,7 @@
 image: maven:3.9.9-eclipse-temurin-21
 
-# Variables globales: Aplican a todos los jobs automáticamente
 variables:
   MAVEN_OPTS: "-Dmaven.repo.local=.m2/repository"
-  # Configuración esencial para Docker-in-Docker y Testcontainers
   DOCKER_HOST: tcp://docker:2375
   DOCKER_TLS_CERTDIR: ""
   TESTCONTAINERS_HOST_OVERRIDE: "docker"
