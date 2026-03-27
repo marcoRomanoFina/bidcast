@@ -15,7 +15,7 @@ A session is created when the user, from the `Device Player` (not implemented ye
 
 During the session, advertisers register **Session Bids**, where they define how much budget they allocate to that device, relevant metadata, and how much they are willing to pay per impression (calculated from RPM).
 
-The session defines the context in which an auction is valid: if it does not exist or has expired, nothing is processed. This helps prevent inconsistencies in a distributed system.
+The session defines the context in which an auction is valid: if it does not exist or has expired, nothing is processed.This helps prevent inconsistencies in a distributed system.
 
 > Currently the relationship is 1:1 between session and device. Later on, the idea is to support multiple devices per publisher.
 
