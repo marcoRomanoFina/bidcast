@@ -60,39 +60,33 @@ public class WebhookService {
 
             com.bidcast.billing_service.payment.Payment localPayment = localPaymentOptional.get();
 
-            // 3. IDEMPOTENCIA: Si ya está aprobado, salimos inmediatamente.
-            if (localPayment.getStatus() == PaymentStatus.APPROVED) {
-                log.info("Payment {} was already processed (APPROVED). No action taken.", externalReference);
-                return;
-            }
-
-            // 4. Si el pago está aprobado en MP, actualizamos y disparamos crédito
+            // 3. Si el pago está aprobado en MP, lo procesamos
             if ("approved".equalsIgnoreCase(mpPayment.getStatus())) {
                 log.info("Payment {} verified as APPROVED in Mercado Pago.", paymentId);
                 
-                localPayment.setStatus(PaymentStatus.APPROVED);
-                localPayment.setMpPaymentId(paymentId);
-                
-                // Al persistir, si otro hilo ya lo hizo, @Version lanzará OptimisticLockingFailureException
-                // y Spring hará rollback automático.
-                paymentRepository.save(localPayment);
+                // Usamos el método rico que maneja la idempotencia internamente
+                if (localPayment.approve(paymentId)) {
+                    paymentRepository.save(localPayment);
 
-                // 5. EVENTO DE CRÉDITO (Event-Driven Architecture)
-                WalletCreditEvent event = new WalletCreditEvent(
-                        localPayment.getAdvertiserId(),
-                        localPayment.getAmount(),
-                        paymentId,
-                        localPayment.getId().toString()
-                );
-                
-                rabbitTemplate.convertAndSend(
-                        RabbitMQConfig.EXCHANGE_BILLING,
-                        RabbitMQConfig.ROUTING_KEY_CREDIT,
-                        event
-                );
-                
-                log.info("Credit of {} sent to RabbitMQ for advertiser: {}", 
-                         localPayment.getAmount(), localPayment.getAdvertiserId());
+                    // 4. EVENTO DE CRÉDITO (Event-Driven Architecture)
+                    WalletCreditEvent event = new WalletCreditEvent(
+                            localPayment.getAdvertiserId(),
+                            localPayment.getAmount(),
+                            paymentId,
+                            localPayment.getId().toString()
+                    );
+                    
+                    rabbitTemplate.convertAndSend(
+                            RabbitMQConfig.EXCHANGE_BILLING,
+                            RabbitMQConfig.ROUTING_KEY_CREDIT,
+                            event
+                    );
+                    
+                    log.info("Credit of {} sent to RabbitMQ for advertiser: {}", 
+                             localPayment.getAmount(), localPayment.getAdvertiserId());
+                } else {
+                    log.info("Payment {} was already processed (APPROVED). No action taken.", externalReference);
+                }
 
             } else {
                 log.warn("Payment {} has status {} in Mercado Pago. No balance will be credited.", 

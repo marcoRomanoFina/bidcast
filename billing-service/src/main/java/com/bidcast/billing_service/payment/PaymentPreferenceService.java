@@ -40,7 +40,6 @@ public class PaymentPreferenceService {
         log.info("Creating payment preference for advertiser: {}", request.advertiserId());
 
         // 1. Guardamos el registro de pago pendiente en nuestra DB
-        // Nota: save() de JpaRepository ya es transaccional por defecto.
         Payment payment = Payment.builder()
                 .advertiserId(request.advertiserId())
                 .amount(request.amount())
@@ -53,7 +52,7 @@ public class PaymentPreferenceService {
             // 3. Creamos el item (la recarga de saldo)
             List<PreferenceItemRequest> items = new ArrayList<>();
             PreferenceItemRequest item = PreferenceItemRequest.builder()
-                    .id(payment.getId().toString()) // Referencia a nuestra DB
+                    .id(payment.getId().toString()) 
                     .title(request.description() != null ? request.description() : "Bidcast balance top-up")
                     .quantity(1)
                     .unitPrice(request.amount())
@@ -80,7 +79,7 @@ public class PaymentPreferenceService {
             Preference preference = preferenceClient.create(preferenceRequest);
 
             // 7. Actualizamos nuestro registro con el ID de preferencia de MP
-            payment.setMpPreferenceId(preference.getId());
+            payment.registerPreference(preference.getId());
             paymentRepository.save(payment);
 
             log.info("Payment preference created successfully in Mercado Pago: {}", preference.getId());
