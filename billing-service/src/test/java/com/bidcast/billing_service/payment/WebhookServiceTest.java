@@ -1,22 +1,22 @@
 package com.bidcast.billing_service.payment;
 
-import com.bidcast.billing_service.config.RabbitMQConfig;
-import com.bidcast.billing_service.payment.event.WalletCreditEvent;
+import com.bidcast.billing_service.core.event.EventPublisher;
+import com.bidcast.billing_service.payment.event.PaymentConfirmedEvent;
 import com.mercadopago.client.payment.PaymentClient;
+import com.mercadopago.resources.payment.Payment;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.amqp.rabbit.core.RabbitTemplate;
 
 import java.math.BigDecimal;
 import java.util.Optional;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -26,71 +26,75 @@ class WebhookServiceTest {
     private PaymentRepository paymentRepository;
 
     @Mock
-    private RabbitTemplate rabbitTemplate;
+    private PaymentClient paymentClient;
 
     @Mock
-    private PaymentClient paymentClient;
+    private EventPublisher eventPublisher;
 
     @InjectMocks
     private WebhookService webhookService;
 
-    @Test
-    void shouldApprovePaymentAndPublishWalletCreditEvent() throws Exception {
-        UUID paymentId = UUID.randomUUID();
-        UUID advertiserId = UUID.randomUUID();
+    private UUID localPaymentId;
+    private com.bidcast.billing_service.payment.Payment localPayment;
+    private Payment mpPayment;
 
-        Payment localPayment = Payment.builder()
-                .id(paymentId)
-                .advertiserId(advertiserId)
-                .amount(new BigDecimal("1500.00"))
+    @BeforeEach
+    void setUp() {
+        localPaymentId = UUID.randomUUID();
+        localPayment = com.bidcast.billing_service.payment.Payment.builder()
+                .id(localPaymentId)
+                .advertiserId(UUID.randomUUID())
+                .amount(new BigDecimal("100.00"))
                 .status(PaymentStatus.PENDING)
                 .build();
 
-        com.mercadopago.resources.payment.Payment mpPayment = mock(com.mercadopago.resources.payment.Payment.class);
-        when(mpPayment.getExternalReference()).thenReturn(paymentId.toString());
-        when(mpPayment.getStatus()).thenReturn("approved");
-        when(paymentClient.get(123L)).thenReturn(mpPayment);
-        when(paymentRepository.findById(paymentId)).thenReturn(Optional.of(localPayment));
-
-        webhookService.processNotification("123");
-
-        assertEquals(PaymentStatus.APPROVED, localPayment.getStatus());
-        assertEquals("123", localPayment.getMpPaymentId());
-        verify(paymentRepository).save(localPayment);
-
-        ArgumentCaptor<WalletCreditEvent> eventCaptor = ArgumentCaptor.forClass(WalletCreditEvent.class);
-        verify(rabbitTemplate).convertAndSend(
-                eq(RabbitMQConfig.EXCHANGE_BILLING),
-                eq(RabbitMQConfig.ROUTING_KEY_CREDIT),
-                eventCaptor.capture()
-        );
-
-        WalletCreditEvent event = eventCaptor.getValue();
-        assertEquals(advertiserId, event.advertiserId());
-        assertEquals(new BigDecimal("1500.00"), event.amount());
-        assertEquals("123", event.paymentId());
-        assertEquals(paymentId.toString(), event.referenceId());
+        mpPayment = mock(Payment.class);
     }
 
     @Test
-    void shouldIgnoreWebhookWhenLocalPaymentDoesNotExist() throws Exception {
-        UUID unknownPaymentId = UUID.randomUUID();
+    void shouldProcessApprovedPaymentAndPublishEvent() throws Exception {
+        String paymentId = "12345";
+        when(mpPayment.getExternalReference()).thenReturn(localPaymentId.toString());
+        when(paymentClient.get(12345L)).thenReturn(mpPayment);
+        when(mpPayment.getStatus()).thenReturn("approved");
+        when(paymentRepository.findById(localPaymentId)).thenReturn(Optional.of(localPayment));
 
-        com.mercadopago.resources.payment.Payment mpPayment = mock(com.mercadopago.resources.payment.Payment.class);
-        when(mpPayment.getExternalReference()).thenReturn(unknownPaymentId.toString());
-        when(paymentClient.get(456L)).thenReturn(mpPayment);
-        when(paymentRepository.findById(unknownPaymentId)).thenReturn(Optional.empty());
+        webhookService.processNotification(paymentId);
 
-        webhookService.processNotification("456");
+        verify(paymentRepository).save(localPayment);
+        assertEquals(PaymentStatus.APPROVED, localPayment.getStatus());
+        assertEquals(paymentId, localPayment.getMpPaymentId());
+
+        // Verificar que se publicó el EVENTO de dominio
+        ArgumentCaptor<PaymentConfirmedEvent> eventCaptor = ArgumentCaptor.forClass(PaymentConfirmedEvent.class);
+        verify(eventPublisher).publish(eventCaptor.capture());
+        
+        PaymentConfirmedEvent publishedEvent = eventCaptor.getValue();
+        assertEquals(localPaymentId, publishedEvent.paymentId());
+        assertEquals(localPayment.getAdvertiserId(), publishedEvent.advertiserId());
+        assertEquals(new BigDecimal("100.00"), publishedEvent.amount());
+    }
+
+    @Test
+    void shouldNotPublishEventIfPaymentAlreadyApproved() throws Exception {
+        String paymentId = "12345";
+        localPayment.approve("old-id"); // Ya está aprobado
+        
+        when(mpPayment.getExternalReference()).thenReturn(localPaymentId.toString());
+        when(paymentClient.get(12345L)).thenReturn(mpPayment);
+        when(mpPayment.getStatus()).thenReturn("approved");
+        when(paymentRepository.findById(localPaymentId)).thenReturn(Optional.of(localPayment));
+
+        webhookService.processNotification(paymentId);
 
         verify(paymentRepository, never()).save(any());
-        verifyNoInteractions(rabbitTemplate);
+        verifyNoInteractions(eventPublisher);
     }
 
     @Test
     void shouldIgnoreWebhookWhenPaymentIdIsInvalid() {
         webhookService.processNotification("abc");
 
-        verifyNoInteractions(paymentClient, paymentRepository, rabbitTemplate);
+        verifyNoInteractions(paymentClient, paymentRepository, eventPublisher);
     }
 }

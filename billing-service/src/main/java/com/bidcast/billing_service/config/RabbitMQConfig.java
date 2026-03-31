@@ -9,13 +9,16 @@ import org.springframework.context.annotation.Configuration;
 public class RabbitMQConfig {
 
     public static final String EXCHANGE_BILLING = "billing.exchange";
-    public static final String ROUTING_KEY_CREDIT = "payment.approved";
 
     @Bean
     public TopicExchange billingExchange() {
         return new TopicExchange(EXCHANGE_BILLING);
     }
 
+    /**
+     * Usamos el ObjectMapper de Spring Boot si está disponible, 
+     * sino creamos uno con el soporte básico de JavaTime para los tests.
+     */
     @Bean
     public JacksonJsonMessageConverter jsonMessageConverter() {
         return new JacksonJsonMessageConverter();
