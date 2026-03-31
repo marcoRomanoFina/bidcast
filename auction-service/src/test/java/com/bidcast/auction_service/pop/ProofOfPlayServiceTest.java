@@ -3,7 +3,6 @@ package com.bidcast.auction_service.pop;
 import com.bidcast.auction_service.bid.BidInfrastructureService;
 import com.bidcast.auction_service.bid.BidPersistenceService;
 import com.bidcast.auction_service.bid.BidRehydrationService;
-import com.bidcast.auction_service.bid.BidStatus;
 import com.bidcast.auction_service.bid.RestoredBid;
 import com.bidcast.auction_service.auction.ReceiptTokenService;
 import com.bidcast.auction_service.auction.ValidatedReceipt;
@@ -173,6 +172,6 @@ class ProofOfPlayServiceTest {
         proofOfPlayService.recordPlay(request);
 
         verify(infrastructureService).removeFromActiveIndex(sessionId, bidId.toString());
-        verify(persistenceService).updateStatus(bidId, BidStatus.EXHAUSTED);
+        verify(persistenceService).exhaust(bidId);
     }
 }

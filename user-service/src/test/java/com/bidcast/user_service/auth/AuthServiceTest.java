@@ -60,7 +60,7 @@ class AuthServiceTest {
                 "secret123",
                 Set.of(UserRole.ADVERTISER)
         );
-        when(userRepository.findByEmail(request.email())).thenReturn(Optional.of(new User()));
+        when(userRepository.findByEmail(request.email())).thenReturn(Optional.of(User.builder().build()));
 
         assertThrows(DuplicateResourceException.class, () -> authService.register(request));
         verify(userRepository, never()).save(any(User.class));

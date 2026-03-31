@@ -3,7 +3,6 @@ package com.bidcast.auction_service.pop;
 import com.bidcast.auction_service.bid.BidInfrastructureService;
 import com.bidcast.auction_service.bid.BidPersistenceService;
 import com.bidcast.auction_service.bid.BidRehydrationService;
-import com.bidcast.auction_service.bid.BidStatus;
 import com.bidcast.auction_service.bid.RestoredBid;
 import com.bidcast.auction_service.auction.ReceiptTokenService;
 import com.bidcast.auction_service.auction.ValidatedReceipt;
@@ -141,6 +140,6 @@ public class ProofOfPlayService {
     //metodo privado para borrar de redis e marcar un Bid EXHAUSTED
     public void handleExhaustedBid(String sessionId, String bidId) {
         infrastructureService.removeFromActiveIndex(sessionId, bidId);
-        persistenceService.updateStatus(UUID.fromString(bidId), BidStatus.EXHAUSTED);
+        persistenceService.exhaust(UUID.fromString(bidId));
     }
 }

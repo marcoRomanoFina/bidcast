@@ -13,6 +13,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 import jakarta.persistence.Version;
+import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -31,8 +32,8 @@ import java.util.UUID;
         @UniqueConstraint(name = "uk_wallet_owner", columnNames = { "owner_id", "owner_type" })
 })
 @Getter
-@Setter
-@NoArgsConstructor
+@Setter(AccessLevel.PROTECTED) 
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
 @AllArgsConstructor
 @Builder
 @Schema(name = "Wallet", description = "Current wallet state within the ledger")
@@ -44,11 +45,13 @@ public class Wallet {
     private UUID id;
 
     @Column(name = "owner_id", nullable = false)
+    @Setter(AccessLevel.NONE)
     @Schema(description = "Wallet owner identifier", example = "2b9fd6d4-ef58-4d56-9aa2-8d6f72d5ce59")
     private UUID ownerId;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "owner_type", nullable = false, length = 20)
+    @Setter(AccessLevel.NONE)
     @Schema(description = "Wallet owner type", example = "ADVERTISER")
     private WalletOwnerType ownerType;
 
@@ -64,6 +67,7 @@ public class Wallet {
             columnDefinition = "DECIMAL(12,4) CHECK (balance >= 0)"
     )
     @Builder.Default
+    @Setter(AccessLevel.NONE) 
     @Schema(description = "Available balance", example = "1060.0000")
     private BigDecimal balance = BigDecimal.ZERO;
 
@@ -75,6 +79,7 @@ public class Wallet {
             columnDefinition = "DECIMAL(12,4) CHECK (frozen_balance >= 0)"
     )
     @Builder.Default
+    @Setter(AccessLevel.NONE) 
     @Schema(description = "Reserved or frozen balance for pending operations", example = "40.0000")
     private BigDecimal frozenBalance = BigDecimal.ZERO;
 

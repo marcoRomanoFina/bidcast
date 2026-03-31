@@ -37,8 +37,7 @@ public class SessionService {
         log.info("Closing local session tracker {}", sessionId);
         
         sessionRepository.findById(sessionId).ifPresent(foundSession -> {
-            foundSession.setStatus(SessionStatus.CLOSED);
-            foundSession.setClosedAt(Instant.now());
+            foundSession.close();
             sessionRepository.save(foundSession);
         });
     }

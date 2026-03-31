@@ -3,6 +3,7 @@ package com.bidcast.auction_service.bid;
 import com.bidcast.auction_service.client.WalletClient;
 import com.bidcast.auction_service.core.exception.SessionInactiveException;
 import com.bidcast.auction_service.core.exception.WalletCommunicationException;
+import com.bidcast.auction_service.bid.BidRehydrationService;
 import com.bidcast.auction_service.session.SessionService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -22,17 +23,18 @@ import static org.mockito.Mockito.*;
 @ExtendWith(MockitoExtension.class)
 class BidRegistrationServiceTest {
 
+    @Mock private SessionService sessionService;
     @Mock private BidPersistenceService persistenceService;
+    @Mock private WalletClient walletClient;
     @Mock private BidInfrastructureService infrastructureService;
     @Mock private BidRehydrationService rehydrationService;
-    @Mock private WalletClient walletClient;
-    @Mock private SessionService sessionService;
 
     @InjectMocks
     private BidRegistrationService registrationService;
 
     private BidRegistrationRequest request;
     private SessionBid pendingBid;
+    private SessionBid activeBid;
 
     @BeforeEach
     void setUp() {
@@ -47,6 +49,14 @@ class BidRegistrationServiceTest {
                 .totalBudget(new BigDecimal("10.00"))
                 .status(BidStatus.PENDING_RESERVATION)
                 .build();
+        
+        activeBid = SessionBid.builder()
+                .id(pendingBid.getId())
+                .sessionId("session-1")
+                .advertiserId("adv-1")
+                .totalBudget(new BigDecimal("10.00"))
+                .status(BidStatus.ACTIVE)
+                .build();
     }
 
     @Test
@@ -54,15 +64,16 @@ class BidRegistrationServiceTest {
     void registerBid_Success() {
         when(sessionService.isSessionActive("session-1")).thenReturn(true);
         when(persistenceService.saveAsPending(any())).thenReturn(pendingBid);
-        when(persistenceService.updateStatus(any(), eq(BidStatus.ACTIVE))).thenReturn(pendingBid);
+        when(persistenceService.activate(any())).thenReturn(activeBid);
         when(rehydrationService.calculateRealBalanceCents(any(SessionBid.class))).thenReturn(1000L);
 
         SessionBid result = registrationService.registerBid(request);
 
         assertNotNull(result);
+        assertEquals(BidStatus.ACTIVE, result.getStatus());
         verify(walletClient).freeze(any());
         verify(infrastructureService).injectIntoRedis(any(), eq(1000L));
-        verify(persistenceService).updateStatus(any(), eq(BidStatus.ACTIVE));
+        verify(persistenceService, never()).fail(any());
     }
 
     @Test
@@ -83,7 +94,7 @@ class BidRegistrationServiceTest {
 
         assertThrows(WalletCommunicationException.class, () -> registrationService.registerBid(request));
         
-        verify(persistenceService).updateStatus(pendingBid.getId(), BidStatus.FAILED);
+        verify(persistenceService).fail(pendingBid.getId());
         verifyNoInteractions(infrastructureService);
     }
 
@@ -92,7 +103,7 @@ class BidRegistrationServiceTest {
     void registerBid_TriggersCompensationOnRedisFailure() {
         when(sessionService.isSessionActive("session-1")).thenReturn(true);
         when(persistenceService.saveAsPending(any())).thenReturn(pendingBid);
-        when(persistenceService.updateStatus(any(), eq(BidStatus.ACTIVE))).thenReturn(pendingBid);
+        when(persistenceService.activate(any())).thenReturn(activeBid);
         
         // Simular fallo en la inyección a Redis
         doThrow(new RuntimeException("Redis Down")).when(infrastructureService).injectIntoRedis(any(), anyLong());
@@ -102,6 +113,6 @@ class BidRegistrationServiceTest {
         // Verificar que se llamó al unfreeze
         verify(walletClient).unfreeze(any());
         // Verificar que se marcó como FAILED al final
-        verify(persistenceService).updateStatus(pendingBid.getId(), BidStatus.FAILED);
+        verify(persistenceService).fail(pendingBid.getId());
     }
 }

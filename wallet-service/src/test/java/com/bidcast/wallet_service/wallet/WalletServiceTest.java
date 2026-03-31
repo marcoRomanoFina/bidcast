@@ -40,7 +40,7 @@ class WalletServiceTest {
         when(walletRepository.findByOwnerIdAndOwnerType(ownerId, WalletOwnerType.ADVERTISER)).thenReturn(Optional.empty());
         when(walletRepository.save(any(Wallet.class))).thenAnswer(invocation -> {
             Wallet wallet = invocation.getArgument(0);
-            wallet.setId(UUID.randomUUID());
+            org.springframework.test.util.ReflectionTestUtils.setField(wallet, "id", UUID.randomUUID());
             return wallet;
         });
 
