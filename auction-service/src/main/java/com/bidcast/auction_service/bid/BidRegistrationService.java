@@ -24,7 +24,7 @@ public class BidRegistrationService {
     private final SessionService sessionService;
 
     // metodo para registrar un bid
-    // mini saga (compensitory), ya que estamos tocando db del wallet service, hay que tener en cuenta 
+    // mini saga (compensatory), ya que estamos tocando db del wallet service, hay que tener en cuenta 
     // y lograr una transaccion distribuida
     public SessionBid registerBid(BidRegistrationRequest request) {
         log.info("Registering bid for advertiser {} in session {}", request.advertiserId(), request.sessionId());
@@ -48,13 +48,13 @@ public class BidRegistrationService {
             ));
         } catch (Exception e) {
             log.error("Failed to freeze funds for bid {}. Cancelling registration.", bid.getId());
-            persistenceService.updateStatus(bid.getId(), BidStatus.FAILED);
+            persistenceService.fail(bid.getId());
             throw new WalletCommunicationException("Wallet service communication failure");
         }
 
         // 3. Activación e Inyección en Redis (Hot Data)
         try {
-            SessionBid activeBid = persistenceService.updateStatus(bid.getId(), BidStatus.ACTIVE);
+            SessionBid activeBid = persistenceService.activate(bid.getId());
             
             // Calculamos el saldo real (que en este punto es el totalBudget) e inyectamos
             long balanceCents = rehydrationService.calculateRealBalanceCents(activeBid);
@@ -78,10 +78,10 @@ public class BidRegistrationService {
                     referenceId,
                     "Rollback due to infrastructure failure"
             ));
-            persistenceService.updateStatus(bid.getId(), BidStatus.FAILED);
+            persistenceService.fail(bid.getId());
         } catch (Exception ex) {
             log.error("CRITICAL ALERT: Failed to unfreeze bid {}. Status: FAILED_CRITICAL", bid.getId());
-            persistenceService.updateStatus(bid.getId(), BidStatus.FAILED_CRITICAL);
+            persistenceService.markCriticalFailure(bid.getId());
         }
     }
 }
