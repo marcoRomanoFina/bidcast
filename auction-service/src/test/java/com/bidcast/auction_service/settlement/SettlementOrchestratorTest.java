@@ -78,7 +78,7 @@ class SettlementOrchestratorTest {
         SessionSettlementCommand cmd = objectMapper.readValue(captured.getPayload(), SessionSettlementCommand.class);
         
         assertEquals(0, new BigDecimal("6.00").compareTo(cmd.totalSpent()));
-        verify(persistenceService).updateStatus(activeBid.getId(), BidStatus.CLOSED);
+        verify(persistenceService).close(activeBid.getId());
     }
 
     @Test
@@ -91,7 +91,7 @@ class SettlementOrchestratorTest {
         orchestrator.orchestrateSettlement(sessionId, pubId);
 
         verify(outboxRepository, never()).save(any());
-        verify(persistenceService).updateStatus(activeBid.getId(), BidStatus.CLOSED);
+        verify(persistenceService).close(activeBid.getId());
     }
 
     @Test
@@ -114,6 +114,6 @@ class SettlementOrchestratorTest {
 
         assertDoesNotThrow(() -> orchestrator.orchestrateSettlement(sessionId, pubId));
 
-        verify(persistenceService).updateStatus(activeBid.getId(), BidStatus.CLOSED);
+        verify(persistenceService).close(activeBid.getId());
     }
 }

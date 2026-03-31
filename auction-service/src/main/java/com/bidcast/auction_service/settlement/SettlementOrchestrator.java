@@ -55,7 +55,7 @@ public class SettlementOrchestrator {
                     // guardamos el event dentro de la transaccion para desp mandarlo
                     saveSettlementCommandInOutbox(bid, publisherId, spentAmount);
                 }
-                persistenceService.updateStatus(bid.getId(), BidStatus.CLOSED);
+                persistenceService.close(bid.getId());
             } catch (Exception e) {
                 log.error("Critical failure while settling bid {}: {}", bid.getId(), e.getMessage());
                 throw e; // Relanzamos para disparar rollback de la transacción de DB.

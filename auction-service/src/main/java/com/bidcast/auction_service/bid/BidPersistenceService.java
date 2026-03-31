@@ -34,14 +34,51 @@ public class BidPersistenceService {
         return sessionBidRepository.save(bid);
     }
 
-    // metodo para crear una transaccion independiente en el cual se updetea el estado de un sessionBid
+    // Activa la puja
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public SessionBid updateStatus(UUID bidId, BidStatus status) {
+    public SessionBid activate(UUID bidId) {
         return sessionBidRepository.findById(bidId)
                 .map(bid -> {
-                    bid.setStatus(status);
+                    bid.activate();
                     return sessionBidRepository.save(bid);
                 })
-                .orElseThrow(() -> new RuntimeException("Puja no encontrada para actualizar estado: " + bidId));
+                .orElseThrow(() -> new RuntimeException("Bid not found to activate: " + bidId));
+    }
+
+    // Marca la puja como fallida
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void fail(UUID bidId) {
+        sessionBidRepository.findById(bidId).ifPresent(bid -> {
+            bid.fail();
+            sessionBidRepository.save(bid);
+        });
+    }
+
+    // Marca un fallo crítico
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void markCriticalFailure(UUID bidId) {
+        sessionBidRepository.findById(bidId).ifPresent(bid -> {
+            bid.markCriticalFailure();
+            sessionBidRepository.save(bid);
+        });
+    }
+
+    // Marca la puja como agotada (sin presupuesto)
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void exhaust(UUID bidId) {
+        sessionBidRepository.findById(bidId).ifPresent(bid -> {
+            // Necesitamos añadir este método en la entidad SessionBid
+            bid.exhaust();
+            sessionBidRepository.save(bid);
+        });
+    }
+
+    // Cierra la puja al finalizar la sesión
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void close(UUID bidId) {
+        sessionBidRepository.findById(bidId).ifPresent(bid -> {
+            bid.close();
+            sessionBidRepository.save(bid);
+        });
     }
 }
