@@ -25,6 +25,7 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.Table;
+import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -34,17 +35,19 @@ import lombok.Setter;
 @Entity
 @Table(name = "users")
 @Getter
-@Setter
-@NoArgsConstructor
-@AllArgsConstructor
+@Setter(AccessLevel.PROTECTED) 
+@NoArgsConstructor(access = AccessLevel.PROTECTED) 
+@AllArgsConstructor(access = AccessLevel.PUBLIC)
 @Builder
 public class User implements UserDetails {
     
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
+    @Setter(AccessLevel.NONE)
     private UUID id;
 
     @Column(nullable = false, unique = true)
+    @Setter(AccessLevel.NONE)
     private String email;
     
     @Column(nullable = false)
@@ -61,15 +64,23 @@ public class User implements UserDetails {
     @Enumerated(EnumType.STRING)        
     @Column(name = "role")  
     @Builder.Default            
+    @Setter(AccessLevel.NONE)
     private Set<UserRole> roles = new HashSet<>();
 
     @CreationTimestamp
     @Column(updatable = false) 
+    @Setter(AccessLevel.NONE)
     private LocalDateTime createdAt;
 
     @UpdateTimestamp
+    @Setter(AccessLevel.NONE)
     private LocalDateTime updatedAt;
 
+
+    @Override
+    public String getPassword() {
+        return password;
+    }
 
     @Override
     public String getUsername() {
