@@ -1,6 +1,6 @@
 package com.bidcast.wallet_service.charge;
 
-import com.bidcast.wallet_service.charge.dto.SessionSettlementCommand;
+import com.bidcast.wallet_service.event.SessionSettledEvent;
 import com.bidcast.wallet_service.transaction.WalletTransactionRepository;
 import com.bidcast.wallet_service.wallet.Wallet;
 import com.bidcast.wallet_service.wallet.WalletOwnerType;
@@ -17,6 +17,7 @@ import org.testcontainers.containers.PostgreSQLContainer;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.Instant;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -56,7 +57,7 @@ class SessionSettlementServiceIntegrationTest {
                 .ownerId(advertiserId)
                 .ownerType(WalletOwnerType.ADVERTISER)
                 .balance(new BigDecimal("1000.00"))
-                .frozenBalance(new BigDecimal("100.00")) // Presupuesto congelado para una sesión
+                .frozenBalance(new BigDecimal("100.00")) 
                 .currencyCode("ARS")
                 .build());
 
@@ -84,7 +85,9 @@ class SessionSettlementServiceIntegrationTest {
         BigDecimal totalSpent = new BigDecimal("40.00");
         BigDecimal initialBudget = new BigDecimal("100.00");
 
-        SessionSettlementCommand command = new SessionSettlementCommand(
+        SessionSettledEvent event = new SessionSettledEvent(
+                UUID.randomUUID(),
+                Instant.now(),
                 bidId.toString(),
                 UUID.randomUUID().toString(),
                 advertiserId.toString(),
@@ -94,29 +97,24 @@ class SessionSettlementServiceIntegrationTest {
         );
 
         // WHEN: Primer intento
-        settlementService.processSettlement(command);
+        settlementService.processSettlement(event);
 
         // THEN: Verificamos saldos
         Wallet updatedAdv = walletRepository.findById(advertiserWallet.getId()).orElseThrow();
         Wallet updatedPub = walletRepository.findById(publisherWallet.getId()).orElseThrow();
         Wallet updatedPlat = walletRepository.findById(platformWallet.getId()).orElseThrow();
 
-        // Advertiser: 1000 - (100 congelados) + (100 - 40 devueltos) = 1060
-        // O más simple: balance inicial (1000) + refund (60) = 1060
         assertEquals(new BigDecimal("1060.0000"), updatedAdv.getBalance().setScale(4, RoundingMode.HALF_UP));
         assertEquals(BigDecimal.ZERO.setScale(4), updatedAdv.getFrozenBalance().setScale(4));
 
-        // Fees: 40 * 0.10 = 4.00
-        // Publisher: 40 - 4 = 36
         assertEquals(new BigDecimal("36.0000"), updatedPub.getBalance().setScale(4, RoundingMode.HALF_UP));
         assertEquals(new BigDecimal("4.0000"), updatedPlat.getBalance().setScale(4, RoundingMode.HALF_UP));
 
-        // Ledger: Debería haber 3 entradas
         long transactionCount = transactionRepository.count();
         assertEquals(3, transactionCount);
 
         // WHEN: Intento duplicado (Idempotencia)
-        settlementService.processSettlement(command);
+        settlementService.processSettlement(event);
 
         // THEN: El contador de transacciones no debería cambiar
         assertEquals(3, transactionRepository.count());

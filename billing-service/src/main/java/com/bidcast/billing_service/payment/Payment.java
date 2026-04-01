@@ -6,6 +6,8 @@ import lombok.AccessLevel;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
+import com.bidcast.billing_service.payment.event.PaymentConfirmedEvent;
+
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
@@ -77,5 +79,20 @@ public class Payment {
         this.status = PaymentStatus.APPROVED;
         this.mpPaymentId = mpPaymentId;
         return true; // Estado actualizado correctamente.
+    }
+
+    /**
+     * Crea el evento de dominio de confirmación de pago.
+     * Encapsula la creación del evento dentro de la entidad.
+     */
+    public com.bidcast.billing_service.payment.event.PaymentConfirmedEvent exportConfirmedEvent() {
+        if (this.status != PaymentStatus.APPROVED) {
+            throw new IllegalStateException("Can only export event for approved payments");
+        }
+        return new PaymentConfirmedEvent(
+                this.id,
+                this.advertiserId,
+                this.amount
+        );
     }
 }

@@ -1,7 +1,6 @@
 package com.bidcast.wallet_service.event;
 
 import com.bidcast.wallet_service.charge.SessionSettlementService;
-import com.bidcast.wallet_service.charge.dto.SessionSettlementCommand;
 import com.bidcast.wallet_service.config.RabbitMQConfig;
 
 import jakarta.validation.Valid;
@@ -18,9 +17,13 @@ public class SettlementEventListener {
 
     private final SessionSettlementService sessionSettlementService;
 
+    /**
+     * Observador del auction-service.
+     * Reacciona cuando una sesión ha sido liquidada y hay que realizar los movimientos financieros.
+     */
     @RabbitListener(queues = RabbitMQConfig.QUEUE_SESSION_SETTLEMENT)
-    public void handleSessionSettlement(@Payload @Valid SessionSettlementCommand command) {
-        log.info("Settlement command received for bid: {}", command.bidId());
-        sessionSettlementService.processSettlement(command);
+    public void handleSessionSettled(@Payload @Valid SessionSettledEvent event) {
+        log.info("Session settled event received for bid: {}. Amount spent: {}", event.bidId(), event.totalSpent());
+        sessionSettlementService.processSettlement(event);
     }
 }

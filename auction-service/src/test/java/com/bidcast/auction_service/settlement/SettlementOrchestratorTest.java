@@ -6,9 +6,7 @@ import com.bidcast.auction_service.bid.BidRehydrationService;
 import com.bidcast.auction_service.bid.BidStatus;
 import com.bidcast.auction_service.bid.SessionBid;
 import com.bidcast.auction_service.bid.SessionBidRepository;
-import com.bidcast.auction_service.core.outbox.OutboxEvent;
-import com.bidcast.auction_service.core.outbox.OutboxRepository;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import com.bidcast.auction_service.core.event.EventPublisher;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -16,11 +14,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
-import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.dao.DataIntegrityViolationException;
-import org.springframework.data.redis.core.StringRedisTemplate;
-import org.springframework.data.redis.core.ValueOperations;
 
 import java.math.BigDecimal;
 import java.util.List;
@@ -37,12 +31,7 @@ class SettlementOrchestratorTest {
     @Mock private SessionBidRepository sessionBidRepository;
     @Mock private BidInfrastructureService infrastructureService;
     @Mock private BidRehydrationService rehydrationService;
-    @Mock private StringRedisTemplate redisTemplate;
-    @Mock private ValueOperations<String, String> valueOperations;
-    @Mock private OutboxRepository outboxRepository;
-    
-    @Spy
-    private ObjectMapper objectMapper = new ObjectMapper();
+    @Mock private EventPublisher eventPublisher;
 
     @InjectMocks
     private SettlementOrchestrator orchestrator;
@@ -63,26 +52,26 @@ class SettlementOrchestratorTest {
     }
 
     @Test
-    @DisplayName("Liquidación Exitosa: Genera evento Outbox con el gasto real")
-    void orchestrateSettlement_Success() throws Exception {
+    @DisplayName("Liquidación Exitosa: Publica evento de dominio con el gasto real")
+    void orchestrateSettlement_Success() {
         when(sessionBidRepository.findBySessionIdAndStatus(sessionId, BidStatus.ACTIVE)).thenReturn(List.of(activeBid));
         // Quedan $4.00 (400 centavos), gastó $6.00
         when(rehydrationService.calculateRealBalanceCents(any(SessionBid.class))).thenReturn(400L);
 
         orchestrator.orchestrateSettlement(sessionId, pubId);
 
-        ArgumentCaptor<OutboxEvent> eventCaptor = ArgumentCaptor.forClass(OutboxEvent.class);
-        verify(outboxRepository).save(eventCaptor.capture());
+        ArgumentCaptor<SessionSettledEvent> eventCaptor = ArgumentCaptor.forClass(SessionSettledEvent.class);
+        verify(eventPublisher).publish(eventCaptor.capture());
         
-        OutboxEvent captured = eventCaptor.getValue();
-        SessionSettlementCommand cmd = objectMapper.readValue(captured.getPayload(), SessionSettlementCommand.class);
+        SessionSettledEvent published = eventCaptor.getValue();
+        assertEquals(0, new BigDecimal("6.00").compareTo(published.totalSpent()));
+        assertEquals(activeBid.getId().toString(), published.bidId());
         
-        assertEquals(0, new BigDecimal("6.00").compareTo(cmd.totalSpent()));
         verify(persistenceService).close(activeBid.getId());
     }
 
     @Test
-    @DisplayName("Sin Gasto: No genera evento Outbox si no se consumió nada")
+    @DisplayName("Sin Gasto: No publica evento si no se consumió nada")
     void orchestrateSettlement_NoSpendNoEvent() {
         when(sessionBidRepository.findBySessionIdAndStatus(sessionId, BidStatus.ACTIVE)).thenReturn(List.of(activeBid));
         // Quedan $10.00 (1000 centavos), gastó $0.00
@@ -90,7 +79,7 @@ class SettlementOrchestratorTest {
 
         orchestrator.orchestrateSettlement(sessionId, pubId);
 
-        verify(outboxRepository, never()).save(any());
+        verify(eventPublisher, never()).publish(any());
         verify(persistenceService).close(activeBid.getId());
     }
 
@@ -99,21 +88,10 @@ class SettlementOrchestratorTest {
     void orchestrateSettlement_ThrowsErrorOnFailure() {
         when(sessionBidRepository.findBySessionIdAndStatus(sessionId, BidStatus.ACTIVE)).thenReturn(List.of(activeBid));
         when(rehydrationService.calculateRealBalanceCents(any(SessionBid.class))).thenReturn(500L);
-        doThrow(new RuntimeException("DB Error")).when(outboxRepository).save(any());
+        
+        // Simular fallo en la publicación del evento
+        doThrow(new RuntimeException("Persistence Error")).when(eventPublisher).publish(any());
 
         assertThrows(RuntimeException.class, () -> orchestrator.orchestrateSettlement(sessionId, pubId));
-    }
-
-    @Test
-    @DisplayName("Idempotencia: si el evento de settlement ya existe, no falla ni duplica")
-    void orchestrateSettlement_IgnoresDuplicateOutboxEvent() {
-        when(sessionBidRepository.findBySessionIdAndStatus(sessionId, BidStatus.ACTIVE)).thenReturn(List.of(activeBid));
-        when(rehydrationService.calculateRealBalanceCents(any(SessionBid.class))).thenReturn(400L);
-        doThrow(new DataIntegrityViolationException("duplicate"))
-                .when(outboxRepository).save(any());
-
-        assertDoesNotThrow(() -> orchestrator.orchestrateSettlement(sessionId, pubId));
-
-        verify(persistenceService).close(activeBid.getId());
     }
 }

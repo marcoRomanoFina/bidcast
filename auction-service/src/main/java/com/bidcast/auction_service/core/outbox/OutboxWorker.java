@@ -4,14 +4,12 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Propagation;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
-import java.util.Optional;
 
-/*
- Procesa cada evento del Outbox de forma atómica e independiente.
+/**
+ * RESPONSABILIDAD: Ejecutar el despacho físico del evento a RabbitMQ.
+ * Recibe el evento ya bloqueado por el Relay para evitar colisiones.
  */
 @Component
 @RequiredArgsConstructor
@@ -22,50 +20,28 @@ public class OutboxWorker {
     private final OutboxRepository outboxRepository;
 
     /**
-     * Procesa un solo evento en su propia transacción (REQUIRES_NEW).
-     * Intenta bloquear la fila individualmente (FOR UPDATE SKIP LOCKED).
+     * Procesa y despacha un evento individual dentro de la transacción del lote.
      */
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public void process(java.util.UUID eventId) {
-        // 1. Intentamos bloquear la fila de forma atómica
-        Optional<OutboxEvent> eventOpt = outboxRepository.findAndLockById(eventId);
-        
-        if (eventOpt.isEmpty()) {
-            // SKIP LOCKED entró en acción: otro nodo/hilo ya tiene la fila
-            return;
-        }
-
-        OutboxEvent event = eventOpt.get();
-
-        // 2. Doble Check: ¿Otro nodo lo procesó mientras este hilo esperaba o antes de obtener el lock?
-        if (event.isProcessed()) {
-            log.debug("Event {} was already processed by another node. Skipping.", eventId);
-            return;
-        }
-
+    public void process(OutboxEvent event) {
         try {
-            event.setAttempts(event.getAttempts() + 1);
-            
-            // Despacho a RabbitMQ (Garantiza At-Least-Once Delivery)
+            log.debug("Dispatching event {} to {}/{}", event.getId(), event.getExchange(), event.getRoutingKey());
+
+            // Despacho a RabbitMQ
             rabbitTemplate.convertAndSend(
-                    event.getExchange(), 
-                    event.getRoutingKey(), 
+                    event.getExchange(),
+                    event.getRoutingKey(),
                     event.getPayload()
             );
-            
-            // Marcado exitoso
-            event.setProcessed(true);
+
+            // Marcamos como procesado
             event.setProcessedAt(Instant.now());
+            event.setProcessed(true); // <--- Faltaba esto
             event.setLastError(null);
-            
-            // Commiteamos el éxito
             outboxRepository.save(event);
-            log.info("Event {} dispatched successfully.", eventId);
-            
+
         } catch (Exception e) {
-            log.error("Failed to dispatch event {}: {}", eventId, e.getMessage());
+            log.error("Failed to dispatch event {}: {}", event.getId(), e.getMessage());
             event.setLastError(e.getMessage());
-            // Guardamos el intento fallido y commiteamos la tx
             outboxRepository.save(event);
         }
     }

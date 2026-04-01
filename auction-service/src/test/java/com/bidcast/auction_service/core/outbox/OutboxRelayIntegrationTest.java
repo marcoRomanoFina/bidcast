@@ -19,6 +19,10 @@ import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+/**
+ * Este test NO es @Transactional para que el Relay pueda commitear sus cambios de verdad
+ * y podamos verificarlos en la base de datos real.
+ */
 @SpringBootTest
 @Import(OutboxRelayIntegrationTest.TestConfig.class)
 class OutboxRelayIntegrationTest extends BaseIntegrationTest {
@@ -36,7 +40,6 @@ class OutboxRelayIntegrationTest extends BaseIntegrationTest {
         this.transactionTemplate = transactionTemplate;
     }
 
-    // Latch para esperar el mensaje asíncrono de RabbitMQ
     private static CountDownLatch latch = new CountDownLatch(1);
     private static String lastReceivedMessage = null;
 
@@ -62,7 +65,10 @@ class OutboxRelayIntegrationTest extends BaseIntegrationTest {
 
     @BeforeEach
     void setUp() {
-        outboxRepository.deleteAll();
+        transactionTemplate.execute(status -> {
+            outboxRepository.deleteAll();
+            return null;
+        });
         latch = new CountDownLatch(1);
         lastReceivedMessage = null;
     }
@@ -70,32 +76,33 @@ class OutboxRelayIntegrationTest extends BaseIntegrationTest {
     @Test
     @DisplayName("Integración 100% Real: DB -> OutboxRelay -> RabbitMQ")
     void scheduleDispatch_FullFlowWithTestcontainers() throws InterruptedException {
-        // 1. Guardar evento en Postgres real (desde BaseIntegrationTest)
+        // 1. Guardar evento inicial en Postgres real
         String payload = "{\"data\":\"full-integration-message-" + UUID.randomUUID() + "\"}";
         
         UUID eventId = transactionTemplate.execute(status -> {
-            OutboxEvent event = new OutboxEvent();
-            event.setAggregateId(UUID.randomUUID().toString());
-            event.setExchange("test.exchange");
-            event.setRoutingKey("test.key");
-            event.setPayload(payload);
-            event.setProcessed(false);
+            OutboxEvent event = OutboxEvent.builder()
+                    .aggregateId(UUID.randomUUID().toString())
+                    .exchange("test.exchange")
+                    .routingKey("test.key")
+                    .payload(payload)
+                    .build();
             return outboxRepository.save(event).getId();
         });
 
-        // 2. Ejecutar el Relay
+        // 2. Ejecutar el Relay (esto corre en su propia transacción gracias a @Transactional en la clase)
         outboxRelay.scheduleDispatch();
 
         // 3. Verificar que el mensaje llegó a RabbitMQ 
         boolean received = latch.await(30, TimeUnit.SECONDS);
         
-        // Assertions
         assertTrue(received, "El mensaje debería haber sido recibido por el RabbitListener");
-        assertEquals(payload, lastReceivedMessage, "El contenido del mensaje en RabbitMQ debe coincidir con el de la DB");
+        assertEquals(payload, lastReceivedMessage);
 
         // 4. Verificar que se actualizó la DB real tras el envío exitoso
-        OutboxEvent updated = outboxRepository.findById(eventId).orElseThrow();
-        assertTrue(updated.isProcessed(), "El evento debe estar marcado como procesado en la DB tras enviarse");
-        assertNotNull(updated.getProcessedAt());
+        transactionTemplate.execute(status -> {
+            OutboxEvent updated = outboxRepository.findById(eventId).orElseThrow();
+            assertNotNull(updated.getProcessedAt(), "El evento debe tener fecha de procesado");
+            return null;
+        });
     }
 }

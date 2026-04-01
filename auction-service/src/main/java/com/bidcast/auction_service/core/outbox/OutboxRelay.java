@@ -4,16 +4,16 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.scheduling.annotation.Scheduled;
-import org.springframework.stereotype.Service;
-
+import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 
 /**
- * RELAY: El encargado de garantizar la entrega de eventos (at-least-once delivery).
- * Realiza el Polling de la tabla y delega el procesamiento al Worker.
+ * RESPONSABILIDAD: Polling periódico de la tabla Outbox.
+ * Selecciona lotes de eventos no procesados usando SKIP LOCKED para escalabilidad horizontal.
  */
-@Service
+@Component
 @RequiredArgsConstructor
 @Slf4j
 public class OutboxRelay {
@@ -22,22 +22,22 @@ public class OutboxRelay {
     private final OutboxWorker outboxWorker;
 
     /**
-     * Polling de la tabla Outbox. Utiliza el repositorio con SKIP LOCKED.
-     * MANTENEMOS @Transactional para que los candados de fila vivan durante 
-     * todo el procesamiento del lote, evitando duplicados en otros nodos.
+     * Poller de eventos.
+     * Abre una transacción por lote y bloquea las filas para que otros nodos las ignoren.
      */
     @Scheduled(fixedDelayString = "${bidcast.outbox.polling-delay:5000}")
+    @Transactional
     public void scheduleDispatch() {
-        // Consultamos candidatos sin bloquear la tabla
-        List<OutboxEvent> pending = outboxRepository.findPending(PageRequest.of(0, 50));
+        // 1. Buscamos y bloqueamos 50 eventos (SKIP LOCKED)
+        List<OutboxEvent> pending = outboxRepository.findPendingBatchAndLock(PageRequest.of(0, 50));
         
-        if (pending.isEmpty()) return;
+        if (pending.isEmpty()) {
+            return;
+        }
 
-        log.info("Starting batch dispatch: {} candidates found.", pending.size());
-        
-        // El Worker intentará bloquear cada evento de forma independiente
-        pending.forEach(event -> outboxWorker.process(event.getId()));
-        
-        log.info("Batch dispatch finished.");
+        log.info("Outbox Relay: Processing batch of {} events.", pending.size());
+
+        // 2. Despachamos el lote
+        pending.forEach(outboxWorker::process);
     }
 }
