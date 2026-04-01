@@ -1,8 +1,8 @@
 package com.bidcast.wallet_service.charge;
 
-import com.bidcast.wallet_service.charge.dto.SessionSettlementCommand;
 import com.bidcast.wallet_service.core.exception.PlatformWalletNotConfiguredException;
 import com.bidcast.wallet_service.core.exception.WalletNotFoundException;
+import com.bidcast.wallet_service.event.SessionSettledEvent;
 import com.bidcast.wallet_service.transaction.WalletTransactionRepository;
 import com.bidcast.wallet_service.transaction.WalletTransactionType;
 import com.bidcast.wallet_service.wallet.Wallet;
@@ -13,6 +13,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.dao.DataIntegrityViolationException;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -42,12 +43,12 @@ class SessionSettlementServiceTest {
     @Test
     void processSettlement_returnsImmediatelyWhenBidWasAlreadySettled() {
         UUID bidId = UUID.randomUUID();
-        SessionSettlementCommand command = commandFor(bidId);
+        SessionSettledEvent event = eventFor(bidId);
 
         when(transactionRepository.existsByReferenceIdAndType(bidId, WalletTransactionType.POP_CHARGE_ADVERTISER_DEBIT))
                 .thenReturn(true);
 
-        settlementService.processSettlement(command);
+        settlementService.processSettlement(event);
 
         verify(walletRepository, never()).findByOwnerIdAndOwnerType(any(), any());
         verify(transactionRepository, never()).saveAll(any());
@@ -57,14 +58,14 @@ class SessionSettlementServiceTest {
     void processSettlement_throwsWhenAdvertiserWalletIsMissing() {
         UUID bidId = UUID.randomUUID();
         UUID advertiserId = UUID.randomUUID();
-        SessionSettlementCommand command = commandFor(bidId, advertiserId, UUID.randomUUID());
+        SessionSettledEvent event = eventFor(bidId, advertiserId, UUID.randomUUID());
 
         when(transactionRepository.existsByReferenceIdAndType(bidId, WalletTransactionType.POP_CHARGE_ADVERTISER_DEBIT))
                 .thenReturn(false);
         when(walletRepository.findByOwnerIdAndOwnerType(advertiserId, WalletOwnerType.ADVERTISER))
                 .thenReturn(Optional.empty());
 
-        assertThrows(WalletNotFoundException.class, () -> settlementService.processSettlement(command));
+        assertThrows(WalletNotFoundException.class, () -> settlementService.processSettlement(event));
     }
 
     @Test
@@ -72,7 +73,7 @@ class SessionSettlementServiceTest {
         UUID bidId = UUID.randomUUID();
         UUID advertiserId = UUID.randomUUID();
         UUID publisherId = UUID.randomUUID();
-        SessionSettlementCommand command = commandFor(bidId, advertiserId, publisherId);
+        SessionSettledEvent event = eventFor(bidId, advertiserId, publisherId);
 
         when(transactionRepository.existsByReferenceIdAndType(bidId, WalletTransactionType.POP_CHARGE_ADVERTISER_DEBIT))
                 .thenReturn(false);
@@ -83,7 +84,7 @@ class SessionSettlementServiceTest {
         when(walletRepository.findByOwnerType(WalletOwnerType.PLATFORM))
                 .thenReturn(List.of());
 
-        assertThrows(PlatformWalletNotConfiguredException.class, () -> settlementService.processSettlement(command));
+        assertThrows(PlatformWalletNotConfiguredException.class, () -> settlementService.processSettlement(event));
         verify(transactionRepository, never()).saveAll(any());
     }
 
@@ -92,7 +93,7 @@ class SessionSettlementServiceTest {
         UUID bidId = UUID.randomUUID();
         UUID advertiserId = UUID.randomUUID();
         UUID publisherId = UUID.randomUUID();
-        SessionSettlementCommand command = commandFor(bidId, advertiserId, publisherId);
+        SessionSettledEvent event = eventFor(bidId, advertiserId, publisherId);
 
         when(transactionRepository.existsByReferenceIdAndType(bidId, WalletTransactionType.POP_CHARGE_ADVERTISER_DEBIT))
                 .thenReturn(false);
@@ -104,15 +105,17 @@ class SessionSettlementServiceTest {
                 .thenReturn(List.of(wallet(UUID.randomUUID(), WalletOwnerType.PLATFORM, "0.00", "0.00")));
         doThrow(new DataIntegrityViolationException("duplicate")).when(transactionRepository).saveAll(any());
 
-        assertDoesNotThrow(() -> settlementService.processSettlement(command));
+        assertDoesNotThrow(() -> settlementService.processSettlement(event));
     }
 
-    private SessionSettlementCommand commandFor(UUID bidId) {
-        return commandFor(bidId, UUID.randomUUID(), UUID.randomUUID());
+    private SessionSettledEvent eventFor(UUID bidId) {
+        return eventFor(bidId, UUID.randomUUID(), UUID.randomUUID());
     }
 
-    private SessionSettlementCommand commandFor(UUID bidId, UUID advertiserId, UUID publisherId) {
-        return new SessionSettlementCommand(
+    private SessionSettledEvent eventFor(UUID bidId, UUID advertiserId, UUID publisherId) {
+        return new SessionSettledEvent(
+                UUID.randomUUID(),
+                Instant.now(),
                 bidId.toString(),
                 UUID.randomUUID().toString(),
                 advertiserId.toString(),

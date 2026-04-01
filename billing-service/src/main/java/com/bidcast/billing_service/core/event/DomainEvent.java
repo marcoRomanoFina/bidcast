@@ -10,5 +10,5 @@ import java.util.UUID;
 public interface DomainEvent {
     UUID eventId();
     Instant occurredOn();
-    String aggregateId();
+    String identifier();
 }

@@ -1,4 +1,4 @@
-# Bidcast
+# 🎬Bidcast
 
 Bidcast is a personal microservices project inspired by AdTech real-time bidding (RTB) platforms.
 It allows advertisers to bid for available time slots on physical display devices, while device owners monetize their screen time by selling ad space through real-time auctions.

@@ -1,21 +1,29 @@
-package com.bidcast.wallet_service.charge.dto;
+package com.bidcast.wallet_service.event;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 import java.math.BigDecimal;
+import java.time.Instant;
+import java.util.UUID;
 
-public record SessionSettlementCommand(
-    @NotBlank(message = "Bid ID is required")
+/**
+ * Réplica del evento de dominio emitido por el auction-service.
+ */
+public record SessionSettledEvent(
+    UUID eventId,
+    Instant occurredOn,
+    
+    @NotBlank(message = "Bid id is required")
     String bidId,
     
-    @NotBlank(message = "Session ID is required")
+    @NotBlank(message = "Session id is required")
     String sessionId,
     
-    @NotBlank(message = "Advertiser ID is required")
+    @NotBlank(message = "Advertiser id is required")
     String advertiserId,
     
-    @NotBlank(message = "Publisher ID is required")
+    @NotBlank(message = "Publisher id is required")
     String publisherId,
     
     @NotNull(message = "Total spent is required")

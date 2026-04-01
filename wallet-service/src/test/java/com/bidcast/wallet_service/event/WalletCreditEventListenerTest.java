@@ -1,6 +1,5 @@
 package com.bidcast.wallet_service.event;
 
-import com.bidcast.wallet_service.event.dto.WalletCreditMessage;
 import com.bidcast.wallet_service.wallet.WalletOwnerType;
 import com.bidcast.wallet_service.wallet.WalletService;
 import org.junit.jupiter.api.Test;
@@ -10,8 +9,10 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.util.UUID;
 
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
 
@@ -25,49 +26,51 @@ class WalletCreditEventListenerTest {
     private WalletCreditEventListener listener;
 
     @Test
-    void handleWalletCredit_delegatesToWalletService() {
-        WalletCreditMessage message = new WalletCreditMessage(
+    void handlePaymentConfirmed_delegatesToWalletService() {
+        PaymentConfirmedEvent event = new PaymentConfirmedEvent(
                 UUID.randomUUID(),
-                new BigDecimal("150.00"),
+                Instant.now(),
                 UUID.randomUUID(),
-                "payment-ref"
+                UUID.randomUUID(),
+                new BigDecimal("150.00")
         );
 
-        listener.handleWalletCredit(message);
+        listener.handlePaymentConfirmed(event);
 
         verify(walletService).credit(
-                message.advertiserId(),
+                event.advertiserId(),
                 WalletOwnerType.ADVERTISER,
-                message.amount(),
-                message.paymentId(),
+                event.amount(),
+                event.paymentId(),
                 "PAYMENT_TOPUP"
         );
     }
 
     @Test
-    void handleWalletCredit_swallowsServiceException() {
-        WalletCreditMessage message = new WalletCreditMessage(
+    void handlePaymentConfirmed_throwsExceptionOnFailure() {
+        PaymentConfirmedEvent event = new PaymentConfirmedEvent(
                 UUID.randomUUID(),
-                new BigDecimal("150.00"),
+                Instant.now(),
                 UUID.randomUUID(),
-                "payment-ref"
+                UUID.randomUUID(),
+                new BigDecimal("150.00")
         );
 
         doThrow(new RuntimeException("boom")).when(walletService).credit(
-                message.advertiserId(),
+                event.advertiserId(),
                 WalletOwnerType.ADVERTISER,
-                message.amount(),
-                message.paymentId(),
+                event.amount(),
+                event.paymentId(),
                 "PAYMENT_TOPUP"
         );
 
-        listener.handleWalletCredit(message);
+        assertThrows(RuntimeException.class, () -> listener.handlePaymentConfirmed(event));
 
         verify(walletService).credit(
-                message.advertiserId(),
+                event.advertiserId(),
                 WalletOwnerType.ADVERTISER,
-                message.amount(),
-                message.paymentId(),
+                event.amount(),
+                event.paymentId(),
                 "PAYMENT_TOPUP"
         );
     }

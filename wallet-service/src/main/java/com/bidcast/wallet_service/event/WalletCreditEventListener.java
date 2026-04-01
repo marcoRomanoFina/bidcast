@@ -1,10 +1,11 @@
 package com.bidcast.wallet_service.event;
 
 import com.bidcast.wallet_service.config.RabbitMQConfig;
-import com.bidcast.wallet_service.event.dto.WalletCreditMessage;
 import com.bidcast.wallet_service.wallet.WalletService;
-import com.bidcast.wallet_service.wallet.WalletOwnerType;
+
 import jakarta.validation.Valid;
+
+import com.bidcast.wallet_service.wallet.WalletOwnerType;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
@@ -19,28 +20,30 @@ public class WalletCreditEventListener {
     private final WalletService walletService;
 
     /**
-     * Listener para el evento de crédito (Top-up).
-     * Aplica validaciones de Bean Validation antes de procesar el mensaje.
+     * Reacciona al Hecho: Pago Confirmado.
+     * Este es el patrón Observer en acción.
      */
     @RabbitListener(queues = RabbitMQConfig.QUEUE_CREDIT)
-    public void handleWalletCredit(@Payload @Valid WalletCreditMessage message) {
-        log.info("Credit event received for advertiser {}: amount {} - Ref: {}", 
-                message.advertiserId(), message.amount(), message.paymentId());
+    public void handlePaymentConfirmed(@Valid @Payload PaymentConfirmedEvent event) {
+        log.info("Payment confirmed event received for advertiser {}: amount {} - Ref: {}", 
+                event.advertiserId(), event.amount(), event.paymentId());
         
         try {
-            // El paymentId es nuestra clave de idempotencia
+            // El wallet service procesa el crédito usando el paymentId como clave de idempotencia
             walletService.credit(
-                message.advertiserId(), 
+                event.advertiserId(), 
                 WalletOwnerType.ADVERTISER, 
-                message.amount(), 
-                message.paymentId(),
+                event.amount(), 
+                event.paymentId(),
                 "PAYMENT_TOPUP"
             );
             
-            log.info("Credit completed successfully for advertiser {}", message.advertiserId());
+            log.info("Balance updated successfully for advertiser {}", event.advertiserId());
         } catch (Exception e) {
-            log.error("Critical error while processing credit for {}: {}", 
-                    message.advertiserId(), e.getMessage());
+            log.error("Critical error while processing PaymentConfirmedEvent for {}: {}", 
+                    event.advertiserId(), e.getMessage());
+            // Lanzamos la excepción para que RabbitMQ pueda gestionar el reintento (DLQ)
+            throw e;
         }
     }
 }

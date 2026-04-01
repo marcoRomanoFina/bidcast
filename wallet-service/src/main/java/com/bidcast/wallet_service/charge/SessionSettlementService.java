@@ -2,7 +2,7 @@ package com.bidcast.wallet_service.charge;
 
 import com.bidcast.wallet_service.core.exception.PlatformWalletNotConfiguredException;
 import com.bidcast.wallet_service.core.exception.WalletNotFoundException;
-import com.bidcast.wallet_service.charge.dto.SessionSettlementCommand;
+import com.bidcast.wallet_service.event.SessionSettledEvent;
 import com.bidcast.wallet_service.transaction.WalletTransaction;
 import com.bidcast.wallet_service.transaction.WalletTransactionRepository;
 import com.bidcast.wallet_service.transaction.WalletTransactionType;
@@ -25,7 +25,7 @@ import java.util.UUID;
 
 /**
  * Servicio de liquidación final de sesiones de puja (Settlement Engine).
- * Se encarga de reconciliar el presupuesto congelado contra el gasto real en Redis,
+ * Se encarga de reconciliar el presupuesto congelado contra el gasto real,
  * repartiendo los fondos entre Publisher y Plataforma, y devolviendo el sobrante al Anunciante.
  */
 @Slf4j
@@ -45,11 +45,11 @@ public class SessionSettlementService {
         backoff = @Backoff(delay = 100, multiplier = 2)
     )
     @Transactional
-    public void processSettlement(SessionSettlementCommand command) {
+    public void processSettlement(SessionSettledEvent event) {
         log.info("Starting financial settlement for bid {}. Spent: {}/{}", 
-                command.bidId(), command.totalSpent(), command.initialBudget());
+                event.bidId(), event.totalSpent(), event.initialBudget());
 
-        UUID bidId = UUID.fromString(command.bidId());
+        UUID bidId = UUID.fromString(event.bidId());
         
         // 1. BLINDAJE DE IDEMPOTENCIA
         if (isAlreadySettled(bidId)) {
@@ -58,21 +58,18 @@ public class SessionSettlementService {
         }
 
         // 2. RECUPERACIÓN DE ESTADO
-        Wallet advertiser = getWalletOrThrow(UUID.fromString(command.advertiserId()), WalletOwnerType.ADVERTISER);
-        Wallet publisher = getWalletOrThrow(UUID.fromString(command.publisherId()), WalletOwnerType.PUBLISHER);
+        Wallet advertiser = getWalletOrThrow(UUID.fromString(event.advertiserId()), WalletOwnerType.ADVERTISER);
+        Wallet publisher = getWalletOrThrow(UUID.fromString(event.publisherId()), WalletOwnerType.PUBLISHER);
         Wallet platform = getPlatformWallet();
 
         // 3. CÁLCULO DE REPARTO (Split logic)
-        BigDecimal spent = command.totalSpent();
+        BigDecimal spent = event.totalSpent();
         BigDecimal platformFee = spent.multiply(PLATFORM_FEE_RATE).setScale(4, RoundingMode.HALF_UP);
         BigDecimal publisherNet = spent.subtract(platformFee);
-        BigDecimal refund = command.initialBudget().subtract(spent);
+        BigDecimal refund = event.initialBudget().subtract(spent);
 
         // 4. MOVIMIENTOS ATÓMICOS DE DOMINIO
-        // Liquidamos el gasto y devolvemos el sobrante al anunciante en un solo paso
-        advertiser.settleAndRefund(spent, command.initialBudget());
-        
-        // Acreditamos a las partes receptoras
+        advertiser.settleAndRefund(spent, event.initialBudget());
         publisher.credit(publisherNet);
         platform.credit(platformFee);
 
