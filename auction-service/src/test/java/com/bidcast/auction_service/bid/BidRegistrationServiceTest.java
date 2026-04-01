@@ -3,7 +3,6 @@ package com.bidcast.auction_service.bid;
 import com.bidcast.auction_service.client.WalletClient;
 import com.bidcast.auction_service.core.exception.SessionInactiveException;
 import com.bidcast.auction_service.core.exception.WalletCommunicationException;
-import com.bidcast.auction_service.bid.BidRehydrationService;
 import com.bidcast.auction_service.session.SessionService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
