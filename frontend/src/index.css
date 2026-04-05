@@ -1,0 +1,113 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+@import "@fontsource/geologica";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+    --font-heading: 'Geologica', sans-serif;
+    --font-sans: 'Geologica', sans-serif;
+    --color-sidebar-ring: var(--sidebar-ring);
+    --color-sidebar-border: var(--sidebar-border);
+    --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+    --color-sidebar-accent: var(--sidebar-accent);
+    --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+    --color-sidebar-primary: var(--sidebar-primary);
+    --color-sidebar-foreground: var(--sidebar-foreground);
+    --color-sidebar: var(--sidebar);
+    --color-chart-5: var(--chart-5);
+    --color-chart-4: var(--chart-4);
+    --color-chart-3: var(--chart-3);
+    --color-chart-2: var(--chart-2);
+    --color-chart-1: var(--chart-1);
+    --color-ring: var(--ring);
+    --color-input: var(--input);
+    --color-border: var(--border);
+    --color-destructive: var(--destructive);
+    --color-accent-foreground: var(--accent-foreground);
+    --color-accent: var(--accent);
+    --color-muted-foreground: var(--muted-foreground);
+    --color-muted: var(--muted);
+    --color-secondary-foreground: var(--secondary-foreground);
+    --color-secondary: var(--secondary);
+    --color-primary-foreground: var(--primary-foreground);
+    --color-primary: var(--primary);
+    --color-popover-foreground: var(--popover-foreground);
+    --color-popover: var(--popover);
+    --color-card-foreground: var(--card-foreground);
+    --color-card: var(--card);
+    --color-foreground: var(--foreground);
+    --color-background: var(--background);
+    --radius-sm: calc(var(--radius) * 0.6);
+    --radius-md: calc(var(--radius) * 0.8);
+    --radius-lg: var(--radius);
+    --radius-xl: calc(var(--radius) * 1.4);
+    --radius-2xl: calc(var(--radius) * 1.8);
+    --radius-3xl: calc(var(--radius) * 2.2);
+    --radius-4xl: calc(var(--radius) * 2.6);
+}
+
+:root {
+    --background: #1b1b1e;
+    --foreground: #f6f4f3;
+    --card: #252529;
+    --card-foreground: #f6f4f3;
+    --popover: #252529;
+    --popover-foreground: #f6f4f3;
+    --primary: #ecd444; /* Unique "BidCast Gold" */
+    --primary-foreground: #1b1b1e;
+    --secondary: #2a2a2e;
+    --secondary-foreground: #f6f4f3;
+    --muted: #2a2a2e;
+    --muted-foreground: #a1a1a1;
+    --accent: #ecd444;
+    --accent-foreground: #1b1b1e;
+    --destructive: #ff4444;
+    --border: #333333;
+    --input: #333333;
+    --ring: #ecd444;
+    --radius: 0.75rem;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+    }
+  body {
+    @apply bg-background text-foreground antialiased;
+    }
+}
+
+@keyframes float-drifting-1 {
+  0% { transform: translate(0, 0) rotate(0deg); }
+  33% { transform: translate(30px, -50px) rotate(10deg); }
+  66% { transform: translate(-20px, 20px) rotate(-5deg); }
+  100% { transform: translate(0, 0) rotate(0deg); }
+}
+
+@keyframes float-drifting-2 {
+  0% { transform: translate(0, 0) rotate(0deg); }
+  33% { transform: translate(-40px, 30px) rotate(-15deg); }
+  66% { transform: translate(50px, -10px) rotate(8deg); }
+  100% { transform: translate(0, 0) rotate(0deg); }
+}
+
+@keyframes float-drifting-3 {
+  0% { transform: translate(0, 0) rotate(0deg); }
+  50% { transform: translate(60px, 60px) rotate(20deg); }
+  100% { transform: translate(0, 0) rotate(0deg); }
+}
+
+.animate-drift-1 { animation: float-drifting-1 20s ease-in-out infinite; }
+.animate-drift-2 { animation: float-drifting-2 25s ease-in-out infinite; }
+.animate-drift-3 { animation: float-drifting-3 30s ease-in-out infinite; }
+
+@keyframes carousel-scroll {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+
+.animate-carousel {
+  animation: carousel-scroll 40s linear infinite;
+}

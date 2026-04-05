@@ -1,0 +1,23 @@
+<svg viewBox="0 0 400 400" xmlns="http://www.w3.org/2000/svg" fill="none">
+  <!-- Background is transparent to integrate with App's dark background -->
+  
+  <!-- Circle with TV Icon -->
+  <circle cx="200" cy="140" r="60" fill="#ecd444" />
+  
+  <!-- TV Icon (Minimalist) -->
+  <path d="M175 125 h 50 v 35 h -50 z" fill="#1b1b1e" /> <!-- Screen -->
+  <path d="M190 120 l -10 -15 M 210 120 l 10 -15" stroke="#1b1b1e" stroke-width="4" stroke-linecap="round" /> <!-- Antennas -->
+  <rect x="185" y="160" width="30" height="5" rx="2" fill="#1b1b1e" /> <!-- Stand -->
+
+  <!-- Text: BIDCAST -->
+  <text 
+    x="200" 
+    y="280" 
+    font-family="Geologica, sans-serif" 
+    font-size="60" 
+    font-weight="900" 
+    fill="#ecd444" 
+    text-anchor="middle"
+    letter-spacing="-2"
+  >BIDCAST</text>
+</svg>
