@@ -27,7 +27,7 @@ class SettlementEventListenerTest {
         SessionSettledEvent event = new SessionSettledEvent(
                 UUID.randomUUID(),
                 Instant.now(),
-                "bid-1",
+                "offer-1",
                 "session-1",
                 "advertiser-1",
                 "publisher-1",

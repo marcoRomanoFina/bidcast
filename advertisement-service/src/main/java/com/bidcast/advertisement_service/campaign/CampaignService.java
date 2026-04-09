@@ -36,4 +36,10 @@ public class CampaignService {
 
         return saved;
     }
+
+    @Transactional(readOnly = true)
+    public Campaign getCampaign(UUID campaignId) {
+        return campaignRepository.findById(campaignId)
+                .orElseThrow(() -> new IllegalArgumentException("Campaign not found: " + campaignId));
+    }
 }

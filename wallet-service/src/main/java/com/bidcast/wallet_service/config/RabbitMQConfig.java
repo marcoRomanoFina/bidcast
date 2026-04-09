@@ -16,7 +16,7 @@ import org.springframework.context.annotation.Primary;
 @Configuration
 public class RabbitMQConfig {
 
-    public static final String EXCHANGE_AUCTION = "auction.exchange";
+    public static final String EXCHANGE_SELECTION = "selection.exchange";
     public static final String EXCHANGE_BILLING = "billing.exchange";
     
     public static final String QUEUE_SESSION_SETTLEMENT = "wallet.session.settlement.queue";
@@ -26,8 +26,8 @@ public class RabbitMQConfig {
     public static final String ROUTING_KEY_PAYMENT_CONFIRMED = "event.paymentconfirmedevent";
 
     @Bean
-    public TopicExchange auctionExchange() {
-        return new TopicExchange(EXCHANGE_AUCTION);
+    public TopicExchange selectionExchange() {
+        return new TopicExchange(EXCHANGE_SELECTION);
     }
 
     @Bean
@@ -46,8 +46,8 @@ public class RabbitMQConfig {
     }
 
     @Bean
-    public Binding bindingSessionSettlement(Queue sessionSettlementQueue, TopicExchange auctionExchange) {
-        return BindingBuilder.bind(sessionSettlementQueue).to(auctionExchange).with(ROUTING_KEY_SETTLEMENT);
+    public Binding bindingSessionSettlement(Queue sessionSettlementQueue, TopicExchange selectionExchange) {
+        return BindingBuilder.bind(sessionSettlementQueue).to(selectionExchange).with(ROUTING_KEY_SETTLEMENT);
     }
 
     @Bean

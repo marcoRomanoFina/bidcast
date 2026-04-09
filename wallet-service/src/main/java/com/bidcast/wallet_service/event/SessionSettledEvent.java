@@ -8,14 +8,14 @@ import java.time.Instant;
 import java.util.UUID;
 
 /**
- * Réplica del evento de dominio emitido por el auction-service.
+ * Réplica del evento de dominio emitido por el selection-service.
  */
 public record SessionSettledEvent(
     UUID eventId,
     Instant occurredOn,
     
-    @NotBlank(message = "Bid id is required")
-    String bidId,
+    @NotBlank(message = "Offer id is required")
+    String offerId,
     
     @NotBlank(message = "Session id is required")
     String sessionId,

@@ -16,6 +16,7 @@ import java.util.UUID;
 
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -119,5 +120,46 @@ class CampaignControllerTest {
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.['X-User-Id']").value("Invalid format"));
+    }
+
+    @Test
+    void should_returnCampaignDetails_when_campaignExists() throws Exception {
+        UUID campaignId = UUID.randomUUID();
+        UUID advertiserId = UUID.randomUUID();
+
+        Campaign campaign = Campaign.builder()
+                .id(campaignId)
+                .name("Campaña Snapshot")
+                .advertiserId(advertiserId)
+                .budget(new BigDecimal("2500.00"))
+                .spent(new BigDecimal("250.00"))
+                .bidCpm(new BigDecimal("4.50"))
+                .status(CampaignStatusType.ACTIVE)
+                .creatives(java.util.List.of(
+                        Creative.builder()
+                                .id(UUID.randomUUID())
+                                .name("Creative A")
+                                .mediaUrl("https://cdn/a.mp4")
+                                .clickUrl("https://click/a")
+                                .build(),
+                        Creative.builder()
+                                .id(UUID.randomUUID())
+                                .name("Creative B")
+                                .mediaUrl("https://cdn/b.mp4")
+                                .clickUrl("https://click/b")
+                                .build()
+                ))
+                .build();
+
+        when(campaignService.getCampaign(eq(campaignId))).thenReturn(campaign);
+
+        mockMvc.perform(get("/api/campaigns/{campaignId}", campaignId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(campaignId.toString()))
+                .andExpect(jsonPath("$.advertiserId").value(advertiserId.toString()))
+                .andExpect(jsonPath("$.name").value("Campaña Snapshot"))
+                .andExpect(jsonPath("$.status").value("ACTIVE"))
+                .andExpect(jsonPath("$.creatives.length()").value(2))
+                .andExpect(jsonPath("$.creatives[0].mediaUrl").value("https://cdn/a.mp4"));
     }
 }

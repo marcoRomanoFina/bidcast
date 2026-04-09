@@ -18,12 +18,12 @@ public class SettlementEventListener {
     private final SessionSettlementService sessionSettlementService;
 
     /**
-     * Observador del auction-service.
+     * Observador del selection-service.
      * Reacciona cuando una sesión ha sido liquidada y hay que realizar los movimientos financieros.
      */
     @RabbitListener(queues = RabbitMQConfig.QUEUE_SESSION_SETTLEMENT)
     public void handleSessionSettled(@Payload @Valid SessionSettledEvent event) {
-        log.info("Session settled event received for bid: {}. Amount spent: {}", event.bidId(), event.totalSpent());
+        log.info("Session settled event received for offer: {}. Amount spent: {}", event.offerId(), event.totalSpent());
         sessionSettlementService.processSettlement(event);
     }
 }

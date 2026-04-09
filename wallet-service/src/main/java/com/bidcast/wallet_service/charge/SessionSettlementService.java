@@ -46,14 +46,14 @@ public class SessionSettlementService {
     )
     @Transactional
     public void processSettlement(SessionSettledEvent event) {
-        log.info("Starting financial settlement for bid {}. Spent: {}/{}", 
-                event.bidId(), event.totalSpent(), event.initialBudget());
+        log.info("Starting financial settlement for offer {}. Spent: {}/{}", 
+                event.offerId(), event.totalSpent(), event.initialBudget());
 
-        UUID bidId = UUID.fromString(event.bidId());
+        UUID offerId = UUID.fromString(event.offerId());
         
         // 1. BLINDAJE DE IDEMPOTENCIA
-        if (isAlreadySettled(bidId)) {
-            log.warn("Idempotency hit: settlement for {} was already processed.", bidId);
+        if (isAlreadySettled(offerId)) {
+            log.warn("Idempotency hit: settlement for {} was already processed.", offerId);
             return;
         }
 
@@ -74,35 +74,35 @@ public class SessionSettlementService {
         platform.credit(platformFee);
 
         // 5. REGISTRO EN LEDGER (Double-Entry principles)
-        recordLedgerEntries(bidId, advertiser, publisher, platform, spent, publisherNet, platformFee);
+        recordLedgerEntries(offerId, advertiser, publisher, platform, spent, publisherNet, platformFee);
 
         // 6. PERSISTENCIA
         walletRepository.saveAll(List.of(advertiser, publisher, platform));
 
-        log.info("Settlement completed for bid {}. Refund: {}, Publisher: {}, Fee: {}", 
-                bidId, refund, publisherNet, platformFee);
+        log.info("Settlement completed for offer {}. Refund: {}, Publisher: {}, Fee: {}", 
+                offerId, refund, publisherNet, platformFee);
     }
 
-    private boolean isAlreadySettled(UUID bidId) {
+    private boolean isAlreadySettled(UUID offerId) {
         return transactionRepository.existsByReferenceIdAndType(
-                bidId, 
+                offerId, 
                 WalletTransactionType.POP_CHARGE_ADVERTISER_DEBIT
         );
     }
 
-    private void recordLedgerEntries(UUID bidId, Wallet adv, Wallet pub, Wallet plat, 
+    private void recordLedgerEntries(UUID offerId, Wallet adv, Wallet pub, Wallet plat, 
                                    BigDecimal spent, BigDecimal pubNet, BigDecimal fee) {
         
         var entries = List.of(
-            WalletTransaction.debitForProofOfPlay(adv, spent, bidId),
-            WalletTransaction.creditForPublisher(pub, pubNet, bidId),
-            WalletTransaction.creditForPlatform(plat, fee, bidId)
+            WalletTransaction.debitForProofOfPlay(adv, spent, offerId),
+            WalletTransaction.creditForPublisher(pub, pubNet, offerId),
+            WalletTransaction.creditForPlatform(plat, fee, offerId)
         );
         
         try {
             transactionRepository.saveAll(entries);
         } catch (DataIntegrityViolationException ex) {
-            log.warn("Persistent idempotency hit: settlement for {} is already recorded.", bidId);
+            log.warn("Persistent idempotency hit: settlement for {} is already recorded.", offerId);
         }
     }
 

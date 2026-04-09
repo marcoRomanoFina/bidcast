@@ -77,9 +77,9 @@ class GatewayRateLimiterIntegrationTest {
         registry.add("spring.cloud.gateway.server.webflux.routes[3].predicates[0]", () -> "Path=/api/v1/wallets/**,/api/v1/proof-of-play-charges/**");
         registry.add("spring.cloud.gateway.server.webflux.routes[3].filters[0]", () -> "AuthenticationFilter=ADMIN");
 
-        registry.add("spring.cloud.gateway.server.webflux.routes[4].id", () -> "auction-service");
+        registry.add("spring.cloud.gateway.server.webflux.routes[4].id", () -> "selection-service");
         registry.add("spring.cloud.gateway.server.webflux.routes[4].uri", () -> backendBaseUrl);
-        registry.add("spring.cloud.gateway.server.webflux.routes[4].predicates[0]", () -> "Path=/api/v1/auction/**,/api/v1/bids/**");
+        registry.add("spring.cloud.gateway.server.webflux.routes[4].predicates[0]", () -> "Path=/api/v1/selection/**,/api/v1/session-offers/**");
         registry.add("spring.cloud.gateway.server.webflux.routes[4].filters[0]", () -> "AuthenticationFilter=PUBLISHER,ADMIN");
         registry.add("spring.cloud.gateway.server.webflux.routes[4].filters[1].name", () -> "RequestRateLimiter");
         registry.add("spring.cloud.gateway.server.webflux.routes[4].filters[1].args.redis-rate-limiter.replenishRate", () -> "1");
@@ -112,7 +112,7 @@ class GatewayRateLimiterIntegrationTest {
         String token = createToken("publisher@bidcast.com", "publisher-rate-ok", List.of("ROLE_PUBLISHER"));
 
         webTestClient.get()
-                .uri("/api/v1/auction/live")
+                .uri("/api/v1/selection/live")
                 .header("Authorization", "Bearer " + token)
                 .exchange()
                 .expectStatus().isOk()
@@ -127,13 +127,13 @@ class GatewayRateLimiterIntegrationTest {
         String token = createToken("publisher@bidcast.com", "publisher-rate-blocked", List.of("ROLE_PUBLISHER"));
 
         webTestClient.get()
-                .uri("/api/v1/auction/live")
+                .uri("/api/v1/selection/live")
                 .header("Authorization", "Bearer " + token)
                 .exchange()
                 .expectStatus().isOk();
 
         webTestClient.get()
-                .uri("/api/v1/auction/live")
+                .uri("/api/v1/selection/live")
                 .header("Authorization", "Bearer " + token)
                 .exchange()
                 .expectStatus().isEqualTo(429);

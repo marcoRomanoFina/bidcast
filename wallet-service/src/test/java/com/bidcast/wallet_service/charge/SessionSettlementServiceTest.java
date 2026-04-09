@@ -41,11 +41,11 @@ class SessionSettlementServiceTest {
     }
 
     @Test
-    void processSettlement_returnsImmediatelyWhenBidWasAlreadySettled() {
-        UUID bidId = UUID.randomUUID();
-        SessionSettledEvent event = eventFor(bidId);
+    void processSettlement_returnsImmediatelyWhenOfferWasAlreadySettled() {
+        UUID offerId = UUID.randomUUID();
+        SessionSettledEvent event = eventFor(offerId);
 
-        when(transactionRepository.existsByReferenceIdAndType(bidId, WalletTransactionType.POP_CHARGE_ADVERTISER_DEBIT))
+        when(transactionRepository.existsByReferenceIdAndType(offerId, WalletTransactionType.POP_CHARGE_ADVERTISER_DEBIT))
                 .thenReturn(true);
 
         settlementService.processSettlement(event);
@@ -56,11 +56,11 @@ class SessionSettlementServiceTest {
 
     @Test
     void processSettlement_throwsWhenAdvertiserWalletIsMissing() {
-        UUID bidId = UUID.randomUUID();
+        UUID offerId = UUID.randomUUID();
         UUID advertiserId = UUID.randomUUID();
-        SessionSettledEvent event = eventFor(bidId, advertiserId, UUID.randomUUID());
+        SessionSettledEvent event = eventFor(offerId, advertiserId, UUID.randomUUID());
 
-        when(transactionRepository.existsByReferenceIdAndType(bidId, WalletTransactionType.POP_CHARGE_ADVERTISER_DEBIT))
+        when(transactionRepository.existsByReferenceIdAndType(offerId, WalletTransactionType.POP_CHARGE_ADVERTISER_DEBIT))
                 .thenReturn(false);
         when(walletRepository.findByOwnerIdAndOwnerType(advertiserId, WalletOwnerType.ADVERTISER))
                 .thenReturn(Optional.empty());
@@ -70,12 +70,12 @@ class SessionSettlementServiceTest {
 
     @Test
     void processSettlement_throwsWhenPlatformWalletIsMissing() {
-        UUID bidId = UUID.randomUUID();
+        UUID offerId = UUID.randomUUID();
         UUID advertiserId = UUID.randomUUID();
         UUID publisherId = UUID.randomUUID();
-        SessionSettledEvent event = eventFor(bidId, advertiserId, publisherId);
+        SessionSettledEvent event = eventFor(offerId, advertiserId, publisherId);
 
-        when(transactionRepository.existsByReferenceIdAndType(bidId, WalletTransactionType.POP_CHARGE_ADVERTISER_DEBIT))
+        when(transactionRepository.existsByReferenceIdAndType(offerId, WalletTransactionType.POP_CHARGE_ADVERTISER_DEBIT))
                 .thenReturn(false);
         when(walletRepository.findByOwnerIdAndOwnerType(advertiserId, WalletOwnerType.ADVERTISER))
                 .thenReturn(Optional.of(wallet(advertiserId, WalletOwnerType.ADVERTISER, "100.00", "20.00")));
@@ -90,12 +90,12 @@ class SessionSettlementServiceTest {
 
     @Test
     void processSettlement_treatsLedgerUniqueConstraintRaceAsIdempotent() {
-        UUID bidId = UUID.randomUUID();
+        UUID offerId = UUID.randomUUID();
         UUID advertiserId = UUID.randomUUID();
         UUID publisherId = UUID.randomUUID();
-        SessionSettledEvent event = eventFor(bidId, advertiserId, publisherId);
+        SessionSettledEvent event = eventFor(offerId, advertiserId, publisherId);
 
-        when(transactionRepository.existsByReferenceIdAndType(bidId, WalletTransactionType.POP_CHARGE_ADVERTISER_DEBIT))
+        when(transactionRepository.existsByReferenceIdAndType(offerId, WalletTransactionType.POP_CHARGE_ADVERTISER_DEBIT))
                 .thenReturn(false);
         when(walletRepository.findByOwnerIdAndOwnerType(advertiserId, WalletOwnerType.ADVERTISER))
                 .thenReturn(Optional.of(wallet(advertiserId, WalletOwnerType.ADVERTISER, "1000.00", "100.00")));
@@ -108,15 +108,15 @@ class SessionSettlementServiceTest {
         assertDoesNotThrow(() -> settlementService.processSettlement(event));
     }
 
-    private SessionSettledEvent eventFor(UUID bidId) {
-        return eventFor(bidId, UUID.randomUUID(), UUID.randomUUID());
+    private SessionSettledEvent eventFor(UUID offerId) {
+        return eventFor(offerId, UUID.randomUUID(), UUID.randomUUID());
     }
 
-    private SessionSettledEvent eventFor(UUID bidId, UUID advertiserId, UUID publisherId) {
+    private SessionSettledEvent eventFor(UUID offerId, UUID advertiserId, UUID publisherId) {
         return new SessionSettledEvent(
                 UUID.randomUUID(),
                 Instant.now(),
-                bidId.toString(),
+                offerId.toString(),
                 UUID.randomUUID().toString(),
                 advertiserId.toString(),
                 publisherId.toString(),
