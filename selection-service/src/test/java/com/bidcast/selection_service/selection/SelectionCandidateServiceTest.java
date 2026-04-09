@@ -7,7 +7,6 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -15,6 +14,7 @@ import static org.mockito.Mockito.lenient;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.OptionalLong;
 import java.util.UUID;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -29,6 +29,7 @@ import com.bidcast.selection_service.offer.OfferStatus;
 import com.bidcast.selection_service.offer.CreativeSnapshot;
 import com.bidcast.selection_service.offer.SessionOffer;
 import com.bidcast.selection_service.offer.SessionOfferRepository;
+import com.bidcast.selection_service.receipt.ReceiptTokenService;
 
 @ExtendWith(MockitoExtension.class)
 class SelectionCandidateServiceTest {
@@ -68,14 +69,14 @@ class SelectionCandidateServiceTest {
 
         when(sessionOfferRepository.findBySessionIdAndStatus("session-1", OfferStatus.ACTIVE))
                 .thenReturn(List.of(higherBid, lowerBid));
-        when(selectionScoringService.candidateForOffer(eq(higherBid), any(), any()))
+        when(selectionScoringService.candidateForOffer(eq(higherBid), any(), any(), any(), any()))
                 .thenReturn(new SelectionCandidatePick(higherBid, higherBid.getCreatives().get(0), new BigDecimal("10.00")))
                 .thenReturn(new SelectionCandidatePick(higherBid, higherBid.getCreatives().get(1), new BigDecimal("10.00")));
-        when(selectionScoringService.candidateForOffer(eq(lowerBid), any(), any()))
+        when(selectionScoringService.candidateForOffer(eq(lowerBid), any(), any(), any(), any()))
                 .thenReturn(new SelectionCandidatePick(lowerBid, lowerBid.getCreatives().get(0), new BigDecimal("6.00")))
                 .thenReturn(SelectionCandidatePick.empty(lowerBid));
-        when(selectionReservationService.reserveBudgetForSelection(eq(higherBid), any(), eq(higherBid.getCreatives().get(0)))).thenReturn(9_000L);
-        when(selectionReservationService.reserveBudgetForSelection(eq(higherBid), any(), eq(higherBid.getCreatives().get(1)))).thenReturn(8_000L);
+        when(selectionReservationService.consumeBudgetForSelection(eq(higherBid), any(), eq(higherBid.getCreatives().get(0)))).thenReturn(OptionalLong.of(9_000L));
+        when(selectionReservationService.consumeBudgetForSelection(eq(higherBid), any(), eq(higherBid.getCreatives().get(1)))).thenReturn(OptionalLong.of(8_000L));
         when(receiptTokenService.generateReceiptId(eq("session-1"), any(), any(), any(), any(), any()))
                 .thenReturn("receipt-1", "receipt-2");
 
@@ -112,11 +113,11 @@ class SelectionCandidateServiceTest {
 
         when(sessionOfferRepository.findBySessionIdAndStatus("session-1", OfferStatus.ACTIVE))
                 .thenReturn(List.of(penalizedBid, cleanBid));
-        when(selectionScoringService.candidateForOffer(eq(penalizedBid), any(), any()))
+        when(selectionScoringService.candidateForOffer(eq(penalizedBid), any(), any(), any(), any()))
                 .thenReturn(new SelectionCandidatePick(penalizedBid, penalizedBid.getCreatives().get(0), new BigDecimal("7.50")));
-        when(selectionScoringService.candidateForOffer(eq(cleanBid), any(), any()))
+        when(selectionScoringService.candidateForOffer(eq(cleanBid), any(), any(), any(), any()))
                 .thenReturn(new SelectionCandidatePick(cleanBid, cleanBid.getCreatives().get(1), new BigDecimal("9.00")));
-        when(selectionReservationService.reserveBudgetForSelection(eq(cleanBid), any(), eq(cleanBid.getCreatives().get(1)))).thenReturn(9_100L);
+        when(selectionReservationService.consumeBudgetForSelection(eq(cleanBid), any(), eq(cleanBid.getCreatives().get(1)))).thenReturn(OptionalLong.of(9_100L));
         when(receiptTokenService.generateReceiptId(eq("session-1"), any(), any(), any(), any(), any()))
                 .thenReturn("receipt-1");
 
@@ -141,7 +142,7 @@ class SelectionCandidateServiceTest {
 
         when(sessionOfferRepository.findBySessionIdAndStatus("session-1", OfferStatus.ACTIVE))
                 .thenReturn(List.of(bid));
-        when(selectionScoringService.candidateForOffer(eq(bid), any(), any()))
+        when(selectionScoringService.candidateForOffer(eq(bid), any(), any(), any(), any()))
                 .thenReturn(SelectionCandidatePick.empty(bid));
 
         List<SelectedCandidate> result = selectionCandidateService.selectCandidates(
@@ -165,9 +166,9 @@ class SelectionCandidateServiceTest {
 
         when(sessionOfferRepository.findBySessionIdAndStatus("session-1", OfferStatus.ACTIVE))
                 .thenReturn(List.of(offer));
-        when(selectionScoringService.candidateForOffer(eq(offer), any(), any()))
+        when(selectionScoringService.candidateForOffer(eq(offer), any(), any(), any(), any()))
                 .thenReturn(new SelectionCandidatePick(offer, offer.getCreatives().get(1), new BigDecimal("10.00")));
-        when(selectionReservationService.reserveBudgetForSelection(eq(offer), any(), eq(offer.getCreatives().get(1)))).thenReturn(9_000L);
+        when(selectionReservationService.consumeBudgetForSelection(eq(offer), any(), eq(offer.getCreatives().get(1)))).thenReturn(OptionalLong.of(9_000L));
         when(receiptTokenService.generateReceiptId(eq("session-1"), any(), any(), any(), any(), any()))
                 .thenReturn("receipt-1");
 
@@ -197,11 +198,11 @@ class SelectionCandidateServiceTest {
 
         when(sessionOfferRepository.findBySessionIdAndStatus("session-1", OfferStatus.ACTIVE))
                 .thenReturn(List.of(expensiveShort, cheaperLong));
-        when(selectionScoringService.candidateForOffer(eq(expensiveShort), any(), any()))
+        when(selectionScoringService.candidateForOffer(eq(expensiveShort), any(), any(), any(), any()))
                 .thenReturn(new SelectionCandidatePick(expensiveShort, expensiveShort.getCreatives().get(0), new BigDecimal("10.00")));
-        when(selectionScoringService.candidateForOffer(eq(cheaperLong), any(), any()))
+        when(selectionScoringService.candidateForOffer(eq(cheaperLong), any(), any(), any(), any()))
                 .thenReturn(new SelectionCandidatePick(cheaperLong, cheaperLong.getCreatives().get(0), new BigDecimal("18.00")));
-        when(selectionReservationService.reserveBudgetForSelection(eq(cheaperLong), any(), eq(cheaperLong.getCreatives().get(0)))).thenReturn(8_200L);
+        when(selectionReservationService.consumeBudgetForSelection(eq(cheaperLong), any(), eq(cheaperLong.getCreatives().get(0)))).thenReturn(OptionalLong.of(8_200L));
         when(receiptTokenService.generateReceiptId(eq("session-1"), any(), any(), any(), any(), any()))
                 .thenReturn("receipt-1");
 
@@ -254,9 +255,9 @@ class SelectionCandidateServiceTest {
 
         when(sessionOfferRepository.findBySessionIdAndStatus("session-1", OfferStatus.ACTIVE))
                 .thenReturn(List.of(offer));
-        when(selectionScoringService.candidateForOffer(eq(offer), any(), any()))
+        when(selectionScoringService.candidateForOffer(eq(offer), any(), any(), any(), any()))
                 .thenReturn(new SelectionCandidatePick(offer, offer.getCreatives().get(0), new BigDecimal("10.00")));
-        when(selectionReservationService.reserveBudgetForSelection(eq(offer), any(), eq(offer.getCreatives().get(0)))).thenReturn(0L);
+        when(selectionReservationService.consumeBudgetForSelection(eq(offer), any(), eq(offer.getCreatives().get(0)))).thenReturn(OptionalLong.of(0L));
         when(receiptTokenService.generateReceiptId(eq("session-1"), any(), any(), any(), any(), any()))
                 .thenReturn("receipt-1");
 
@@ -265,7 +266,7 @@ class SelectionCandidateServiceTest {
         );
 
         assertEquals(1, result.size());
-        verify(selectionReservationService).reserveBudgetForSelection(eq(offer), any(), eq(offer.getCreatives().get(0)));
+        verify(selectionReservationService).consumeBudgetForSelection(eq(offer), any(), eq(offer.getCreatives().get(0)));
     }
 
     @Test
@@ -279,7 +280,7 @@ class SelectionCandidateServiceTest {
 
         when(sessionOfferRepository.findBySessionIdAndStatus("session-1", OfferStatus.ACTIVE))
                 .thenReturn(List.of(offer));
-        when(selectionScoringService.candidateForOffer(eq(offer), any(), any()))
+        when(selectionScoringService.candidateForOffer(eq(offer), any(), any(), any(), any()))
                 .thenReturn(SelectionCandidatePick.empty(offer));
 
         List<SelectedCandidate> result = selectionCandidateService.selectCandidates(

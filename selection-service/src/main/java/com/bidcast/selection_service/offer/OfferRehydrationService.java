@@ -8,8 +8,12 @@ import org.springframework.stereotype.Service;
 import java.util.UUID;
 
 /**
- *  Este service es para la reconstrucción del estado en Redis ante fallos.
- * Actúa como el puente de recuperación entre PostgreSQL y Redis.
+ * Este service reconstruye el hot state cuando Redis pierde información o una key
+ * necesaria ya no está disponible.
+ *
+ * Conceptualmente actúa como puente entre:
+ * - PostgreSQL como source of truth
+ * - Redis como estado operativo rápido
  */
 @Service
 @RequiredArgsConstructor
@@ -21,7 +25,10 @@ public class OfferRehydrationService {
     private final ProofOfPlayRepository popRepository;
 
     /**
-     * Rehidrata una offer individual en Redis.
+     * Rehidrata una sola offer.
+     *
+     * Se usa cuando el hot path necesita una offer puntual y su estado caliente
+     * no está disponible.
      */
     public RestoredOffer rehydrateOffer(UUID offerId) {
         return sessionOfferRepository.findById(offerId)
@@ -35,7 +42,10 @@ public class OfferRehydrationService {
     }
 
     /**
-     * Rehidrata todas las offers activas de una sesión.
+     * Rehidrata en bloque todas las offers activas de una session.
+     *
+     * Es útil cuando vuelve Redis o cuando se quiere recomponer todo el hot state
+     * de una session activa.
      */
     public void rehydrateSession(String sessionId) {
         log.info("Starting bulk rehydration for session {}", sessionId);
@@ -47,13 +57,16 @@ public class OfferRehydrationService {
     }
 
     /**
-     * Calcula el saldo real basado en Presupuesto Total - Gasto Registrado (PoPs).
+     * Calcula el saldo real de una offer según lo persistido.
+     *
+     * Fórmula:
+     * totalBudget - suma(costCharged de todos los PoP)
      */
     public long calculateRealBalanceCents(SessionOffer offer) {
-        // Obtenemos la suma de PoPs desde PostgreSQL (Source of Truth)
+        // PostgreSQL es la fuente real de verdad para el gasto confirmado.
         java.math.BigDecimal spent = popRepository.sumCostByOfferId(offer.getId().toString());
         
-        // El saldo real es: (Total - Gastado) convertido a centavos para Redis
+        // Redis trabaja con centavos para simplificar operaciones numéricas rápidas.
         return offer.getTotalBudget()
                 .subtract(spent)
                 .multiply(new java.math.BigDecimal("100"))

@@ -1,4 +1,4 @@
-package com.bidcast.selection_service.selection;
+package com.bidcast.selection_service.receipt;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;

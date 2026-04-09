@@ -5,6 +5,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -21,6 +22,8 @@ import lombok.RequiredArgsConstructor;
 
 @Service
 @RequiredArgsConstructor
+// Servicio de scoring del hot path.
+// Decide qué creative de qué offer conviene devolver en este instante para este device.
 public class SelectionScoringService {
 
     /**
@@ -36,49 +39,83 @@ public class SelectionScoringService {
     private final SelectionPricingService selectionPricingService;
     private final StringRedisTemplate redisTemplate;
 
+    /**
+     * Resuelve el mejor candidato posible dentro de una offer específica.
+     *
+     * No persiste nada:
+     * - solo observa budget
+     * - aplica exclusiones locales
+     * - aplica penalty global por campaign
+     * - devuelve un SelectionCandidatePick intermedio
+     */
     public SelectionCandidatePick candidateForOffer(
             SessionOffer offer,
             CandidateSelectionRequest request,
-            Set<String> excludedCreatives
+            Set<String> excludedCreatives,
+            Map<String, Set<String>> blockedCreativesCache,
+            Map<String, BigDecimal> campaignPenaltyCache
     ) {
+        // Un budget no positivo ya deja a la offer fuera de juego.
         long availableBudgetCents = availableBudgetCents(request.sessionId(), offer);
         if (availableBudgetCents <= 0) {
             return SelectionCandidatePick.empty(offer);
         }
 
+        // Se combinan exclusiones del caller con bloqueos locales ya materializados en Redis.
         Set<String> effectiveExcluded = new HashSet<>(excludedCreatives);
-        effectiveExcluded.addAll(blockedCreativeIdsForOffer(offer, request));
+        effectiveExcluded.addAll(blockedCreativeIdsForOffer(offer, request, blockedCreativesCache));
         CreativeSnapshot creative = nextAffordableCreative(offer, effectiveExcluded, availableBudgetCents).orElse(null);
 
         if (creative == null) {
             return SelectionCandidatePick.empty(offer);
         }
 
-        BigDecimal adjustedPricePerSlot = applyCampaignPenalty(request.sessionId(), offer);
+        // El score final compara valor económico ajustado por recencia global.
+        BigDecimal adjustedPricePerSlot = applyCampaignPenalty(request.sessionId(), offer, campaignPenaltyCache);
         return new SelectionCandidatePick(offer, creative, scoreFor(creative, adjustedPricePerSlot));
     }
 
+    /**
+     * Responde si una offer quedó estructuralmente incapaz de financiar cualquiera de sus creatives.
+     */
     public boolean isOfferPermanentlyUnaffordable(SessionOffer offer, long availableBudgetCents) {
-        return offer.getCreatives().stream()
-                .mapToLong(creative -> selectionPricingService.selectionCostCents(offer, creative))
-                .min()
+        return offer.minimumSlotCount()
                 .stream()
+                .map(minSlotCount -> offer.getPricePerSlot()
+                        .multiply(BigDecimal.valueOf(minSlotCount))
+                        .movePointRight(2)
+                        .longValueExact())
                 .allMatch(minCost -> minCost > availableBudgetCents);
     }
 
+    /**
+     * Lee budget caliente y, si falta, rehidrata desde DB.
+     */
     public long availableBudgetCents(String sessionId, SessionOffer offer) {
         return infrastructureService.getBudgetCents(sessionId, offer.getId().toString())
                 .orElseGet(() -> rehydrationService.rehydrateOffer(offer.getId()).balanceCents());
     }
 
-    private Set<String> blockedCreativeIdsForOffer(SessionOffer offer, CandidateSelectionRequest request) {
-        List<String> creativeIds = offer.getCreatives().stream()
-                .map(CreativeSnapshot::creativeId)
-                .collect(Collectors.toList());
-        return infrastructureService.filterBlockedCreativeIds(request.sessionId(), request.deviceId(), creativeIds);
+    // Obtiene los creatives de esta offer que hoy están bloqueados para ese device.
+    private Set<String> blockedCreativeIdsForOffer(
+            SessionOffer offer,
+            CandidateSelectionRequest request,
+            Map<String, Set<String>> blockedCreativesCache
+    ) {
+        return blockedCreativesCache.computeIfAbsent(offer.getId().toString(), ignored -> {
+            List<String> creativeIds = offer.getCreatives().stream()
+                    .map(CreativeSnapshot::creativeId)
+                    .collect(Collectors.toList());
+            return infrastructureService.filterBlockedCreativeIds(request.sessionId(), request.deviceId(), creativeIds);
+        });
     }
 
-    private BigDecimal applyCampaignPenalty(String sessionId, SessionOffer offer) {
+    // Aplica una penalización suave si la misma campaign fue reproducida recientemente.
+    private BigDecimal applyCampaignPenalty(String sessionId, SessionOffer offer, Map<String, BigDecimal> campaignPenaltyCache) {
+        return campaignPenaltyCache.computeIfAbsent(offer.getCampaignId(), ignored -> loadCampaignAdjustedPrice(sessionId, offer));
+    }
+
+    private BigDecimal loadCampaignAdjustedPrice(String sessionId, SessionOffer offer) {
         // La recencia global ajusta score, pero no bloquea campaigns de forma dura.
         String key = String.format("session:%s:campaign:%s:last_played", sessionId, offer.getCampaignId());
         String rawLastPlayed = redisTemplate.opsForValue().get(key);
@@ -97,10 +134,17 @@ public class SelectionScoringService {
         return offer.getPricePerSlot();
     }
 
+    // El valor económico real de un creative es pricePerSlot * slotCount.
     private BigDecimal scoreFor(CreativeSnapshot creative, BigDecimal pricePerSlot) {
         return pricePerSlot.multiply(BigDecimal.valueOf(creative.slotCount()));
     }
 
+    /**
+     * Busca el siguiente creative servible:
+     * - respetando el orden circular de rotación
+     * - ignorando excluded creatives
+     * - chequeando affordability real contra el budget disponible
+     */
     private Optional<CreativeSnapshot> nextAffordableCreative(SessionOffer offer, Set<String> excludedCreativeIds, long availableBudgetCents) {
         if (offer.getCreatives() == null || offer.getCreatives().isEmpty()) {
             return Optional.empty();

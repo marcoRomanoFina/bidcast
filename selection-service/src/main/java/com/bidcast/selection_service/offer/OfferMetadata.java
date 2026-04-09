@@ -8,7 +8,8 @@ import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;
 
-// Record para guardar la data escencial de una Offer para guardar en redis, asi ahorramos recursos
+// Snapshot compacto de una SessionOffer para Redis.
+// Existe para no tener que serializar la entidad JPA completa en el hot state.
 public record OfferMetadata(
     @NotNull(message = "Offer id is required")
     UUID id,
@@ -33,7 +34,7 @@ public record OfferMetadata(
     @NotEmpty(message = "At least one creative snapshot is required")
     List<CreativeSnapshot> creatives
 ) {
-    // para pasarlo facil de entidad a metadata
+    // Adaptador rápido desde la entidad persistida a su representación liviana de infraestructura.
     public static OfferMetadata fromEntity(SessionOffer bid) {
         return new OfferMetadata(
             bid.getId(),

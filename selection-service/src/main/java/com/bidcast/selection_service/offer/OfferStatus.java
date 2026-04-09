@@ -1,7 +1,10 @@
 package com.bidcast.selection_service.offer;
 
 /**
- * enum para los status
+ * Estados de lifecycle de una SessionOffer.
+ *
+ * No describen solo "vida o muerte" de la offer, sino en qué parte del flujo
+ * operativo/financiero se encuentra.
  */
 public enum OfferStatus {
     PENDING_RESERVATION,

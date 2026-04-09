@@ -1,79 +1,120 @@
 # Selection Service
 
-`selection-service` es el servicio que decide que anuncio puede mostrar un device dentro de una session activa. No modela RTB clasico por impresion; modela seleccion por slots de tiempo dentro de una reproduccion continua.
+`selection-service` is the playback decision engine for a venue session.
+It does not model classic RTB impression bidding. It models continuous screen playback where multiple devices inside the same venue request the next paid media items to display.
 
-## Responsabilidades
+The domain is slot-based:
+- playback uses fixed 5-second units
+- each creative consumes one or more slots
+- economic value is `pricePerSlot * slotCount`
+- selection returns confirmed playback items, not soft auction hints
 
-- registrar `SessionOffer`s para una session
-- traer snapshots de campaign y creatives desde `advertisement-service`
-- mantener estado hot en Redis para offers activas y budget disponible
-- devolver los siguientes `N` candidates para un `device`
-- registrar `Proof of Play`
-- reservar cooldown local por `device + creative` al seleccionar
-- aplicar penalizacion global por `campaign` cuando llega el `PoP`
-- cerrar la session con settlement contra el frozen en `wallet-service`
+## Domain Model
 
-## Modelo actual
+### Venue session playback
+
+A venue session can have multiple devices requesting playback at nearly the same time.
+Each device asks for the next `N` selections it can safely show, while the service coordinates:
+
+- hot budget consumption
+- local repetition control per device
+- soft global pacing per campaign
+- signed playback authorization
+- proof-of-play confirmation
 
 ### SessionOffer
 
-Una `SessionOffer` representa la entrada economica de un advertiser en una session.
+A `SessionOffer` is the economic entry of a campaign into a session.
 
-Incluye:
-
+It includes:
 - `sessionId`
 - `advertiserId`
 - `campaignId`
 - `totalBudget`
 - `pricePerSlot`
 - `deviceCooldownSeconds`
-- lista de `CreativeSnapshot`
+- a list of `CreativeSnapshot`s
 
-Cada offer entra una sola vez a la session. Los creatives no compiten como ofertas separadas: la seleccion economica se hace sobre la offer y despues se rota el creative elegible dentro de esa offer.
+Each campaign enters the session once as an offer. Creatives do not compete as separate bids. The engine scores the offer, then rotates the next eligible creative inside that offer.
 
 ### CreativeSnapshot
 
-Es una foto liviana del creative tomada desde `advertisement-service` al crear la offer.
+A `CreativeSnapshot` is a lightweight local copy fetched from `advertisement-service` when the offer is created.
 
-Incluye:
-
+It includes:
 - `creativeId`
 - `mediaUrl`
 - `slotCount`
 
-### Proof Of Play
+## Responsibilities
 
-El `PoP` es la confirmacion de que un creative realmente fue reproducido en un device.
+`selection-service` is responsible for:
 
-Cuando llega un `PoP`:
+- registering `SessionOffer`s for a session
+- fetching campaign and creative snapshots from `advertisement-service`
+- maintaining Redis hot state for active offers and remaining operational budget
+- selecting the next confirmed playback items for a device
+- consuming hot budget before returning a selection
+- reserving local cooldown per `device + creative`
+- validating signed receipts
+- recording `Proof of Play`
+- applying soft global recency per campaign
+- closing the session with settlement-oriented data for downstream financial processing
 
-- se valida el receipt firmado
-- se persiste el evento como source of truth
-- se descuenta budget hot en Redis
-- se registra recencia global por campaign
+## Selection Model
 
-## Redis
+Selection is no longer framed as “who won the auction?”.
+It is framed as “what should this device play next inside a shared venue session?”.
 
-Redis se usa como capa de estado efimero y hot-path:
+The hot path works like this:
+
+1. load active offers for the session
+2. exclude creatives already blocked for that device
+3. apply a soft recency penalty for recently played campaigns
+4. find the best `offer + creative` combination by playback value
+5. advance the creative rotation pointer
+6. consume hot budget in Redis
+7. reserve the local device cooldown
+8. return a fully resolved playback item with a signed receipt
+
+This means the response already represents confirmed playback selections.
+
+## Scoring
+
+The scoring model is playback-oriented, not RTB-oriented.
+
+- value is based on `pricePerSlot * slotCount`
+- local repetition is controlled per `device + creative`
+- global pacing is controlled per `campaign`
+- budget is checked before returning the selection
+
+So a cheaper offer per slot can still win if its creative occupies more slots and produces higher total playback value.
+
+## Redis Hot State
+
+Redis is used as operational read/write state, not as the durable source of truth.
+
+Keys currently used:
 
 - `session:{sessionId}:active_offers`
-  indice de offers activas
+  active offer index for the session
 - `session:{sessionId}:offer:{offerId}`
-  hash con `budget` y `metadata`
-- `session:{sessionId}:campaign:{campaignId}:last_played`
-  recencia global para penalizacion soft
+  hash containing `budget` and serialized `metadata`
 - `session:{sessionId}:device:{deviceId}:creative:{creativeId}:cooldown`
-  cooldown local fuerte por device
+  hard local cooldown for that device
+- `session:{sessionId}:campaign:{campaignId}:last_played`
+  soft global recency signal for campaign pacing
 - `pop:processed:{receiptId}`
-  idempotencia de PoP
+  short idempotency guard for proof-of-play processing
 
-Si Redis pierde los cooldowns locales, no se rompe la integridad financiera: simplemente vuelven a construirse con los proximos `PoP`.
+Redis may lose hot state without breaking financial integrity.
+PostgreSQL remains the durable source of truth, and offer state can be rehydrated when needed.
 
-## Seleccion de candidates
+## Selection Endpoint
 
 `POST /api/v1/selection/candidates`
 
-Request:
+Example request:
 
 ```json
 {
@@ -84,16 +125,7 @@ Request:
 }
 ```
 
-El selector:
-
-1. carga offers activas de la session
-2. excluye creatives bloqueados para ese device
-3. aplica penalizacion por campaign reciente
-4. rota creatives dentro de cada offer
-5. bloquea en Redis los creatives seleccionados para ese device
-6. devuelve los mejores `N` candidates ya resueltos
-
-Response:
+Example response:
 
 ```json
 [
@@ -113,18 +145,18 @@ Response:
 ]
 ```
 
-### Errores operativos
+Operational errors:
 
 - `409 Conflict`
-  otra seleccion ya esta corriendo para la misma session
+  another worker is already selecting for the same session
 - `503 Service Unavailable`
-  Redis o Redisson no estan disponibles y el hot path no puede operar de forma segura
+  Redis or Redisson is unavailable and the hot path cannot continue safely
 
 ## Proof of Play
 
 `POST /api/v1/selection/pop`
 
-Request:
+Example request:
 
 ```json
 {
@@ -136,30 +168,51 @@ Request:
 }
 ```
 
+When `PoP` arrives, the service:
+
+- validates the signed receipt
+- persists playback evidence in PostgreSQL
+- applies idempotency checks
+- updates global campaign recency
+
+Budget is not first charged at `PoP`.
+Budget is already consumed when selection is returned.
+`PoP` confirms that the authorized playback really happened.
+
 ## Rehydration
 
-Si Redis pierde el estado hot de una offer:
+If Redis loses the hot state of an offer:
 
-- `OfferRehydrationService` reconstruye metadata y budget desde PostgreSQL
-- el budget real se calcula usando `ProofOfPlay` como source of truth
-- la offer vuelve a inyectarse en Redis
+- `OfferRehydrationService` rebuilds metadata and operational budget from PostgreSQL
+- durable playback truth comes from `ProofOfPlay`
+- the offer is injected back into Redis
 
-Los cooldowns locales por creative no se rehidratan a proposito, porque son efimeros y pueden recomenzar sin impacto contable.
+Local device cooldowns are intentionally not rehydrated.
+They are ephemeral pacing controls and can safely start fresh.
 
-## Flujo resumido
+## Failure Model
 
-1. el advertiser crea una `SessionOffer`
-2. el servicio congela budget en wallet
-3. el device pide `N` candidates
-4. el servicio responde creatives ya seleccionados
-5. el device reproduce uno
-6. manda `PoP`
-7. el servicio descuenta budget y registra recencia global por campaign
-8. al final de la session se hace settlement
+- Redis down during selection: fail fast with `503`
+- session already being selected by another worker: `409`
+- missing hot budget: rehydrate and retry once
+- hot-state loss: recover from PostgreSQL and `ProofOfPlay`
 
-## Tests
+This keeps the hot path fast while preserving durable financial correctness in the database layer.
 
-Para correr la suite del modulo:
+## Flow Summary
+
+1. an advertiser registers a `SessionOffer`
+2. wallet funds are frozen for that offer
+3. a device asks for the next `N` playback items
+4. the service returns confirmed selections with signed receipts
+5. the device plays one of them
+6. the device sends `Proof of Play`
+7. playback evidence is persisted and campaign recency is updated
+8. the session later closes and downstream settlement can use the final durable state
+
+## Testing
+
+Run the module test suite with:
 
 ```bash
 ./mvnw test

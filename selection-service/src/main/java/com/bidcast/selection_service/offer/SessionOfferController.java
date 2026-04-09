@@ -19,7 +19,8 @@ import lombok.RequiredArgsConstructor;
 @RestController
 @RequestMapping("/api/v1/session-offers")
 @RequiredArgsConstructor
-@Tag(name = "Session Offers", description = "Alta de offers economicas que participan dentro de una session")
+@Tag(name = "Session Offers", description = "Endpoints to register priced offers that participate inside a session")
+// Controller fino: expone el alta de offers, mientras la lógica real vive en SessionOfferService.
 public class SessionOfferController {
 
     private final SessionOfferService sessionOfferService;
@@ -27,16 +28,16 @@ public class SessionOfferController {
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     @Operation(
-            summary = "Crea una offer dentro de una session",
-            description = "Registra una offer economica por campaign dentro de una session, toma snapshots de creatives desde advertisement-service "
-                    + "y la deja lista para entrar al hot path."
+            summary = "Create an offer inside a session",
+            description = "Registers a priced offer for a campaign inside a session, takes creative snapshots from advertisement-service, "
+                    + "and makes it ready for the hot path."
     )
     @ApiResponse(
             responseCode = "201",
-            description = "Offer creada correctamente",
+            description = "Offer created successfully",
             content = @Content(schema = @Schema(implementation = SessionOffer.class))
     )
-    @ApiResponse(responseCode = "400", description = "Request invalido")
+    @ApiResponse(responseCode = "400", description = "Invalid request")
     public ResponseEntity<SessionOffer> create(@RequestBody @Valid CreateSessionOfferRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(sessionOfferService.create(request));
     }

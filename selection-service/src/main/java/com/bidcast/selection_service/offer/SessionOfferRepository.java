@@ -6,7 +6,8 @@ import org.springframework.stereotype.Repository;
 import java.util.UUID;
 import java.util.List;
 
-// queries a DB sobre session offers
+// Repository principal para cargar offers por session y estado.
+// El hot path consulta mucho por estas dos dimensiones.
 @Repository
 public interface SessionOfferRepository extends JpaRepository<SessionOffer, UUID> {
     List<SessionOffer> findBySessionIdAndStatus(String sessionId, OfferStatus status);

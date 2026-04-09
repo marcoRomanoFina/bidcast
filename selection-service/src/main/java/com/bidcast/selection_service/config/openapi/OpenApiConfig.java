@@ -13,7 +13,7 @@ public class OpenApiConfig {
         return new OpenAPI()
                 .info(new Info()
                         .title("Selection Service API")
-                        .description("API para registrar offers por session, seleccionar reproducciones ya reservadas y confirmar Proof of Play.")
+                        .description("API to register session offers, select already reserved paid plays, and confirm Proof of Play.")
                         .version("v0.0.1"));
     }
 }

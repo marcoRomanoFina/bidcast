@@ -17,6 +17,9 @@ import lombok.RequiredArgsConstructor;
 
 @Service
 @RequiredArgsConstructor
+// Encapsula el lock distribuido por session.
+// Evita que dos workers seleccionen al mismo tiempo para la misma session y se pisen
+// en punteros, budget o decisiones de ranking.
 public class SelectionLockService {
 
     private static final long SELECTION_LOCK_WAIT_MILLIS = 0L;
@@ -24,6 +27,9 @@ public class SelectionLockService {
 
     private final RedissonClient redissonClient;
 
+    /**
+     * Ejecuta una acción bajo exclusión mutua por session.
+     */
     public <T> T withSessionLock(String sessionId, Supplier<T> action) {
         try {
             RLock lock = redissonClient.getLock(selectionLockKey(sessionId));
@@ -46,6 +52,7 @@ public class SelectionLockService {
         }
     }
 
+    // Intenta tomar el lock de la session de manera no bloqueante.
     private boolean acquireSessionLock(RLock lock, String sessionId) {
         try {
             boolean acquired = lock.tryLock(
@@ -63,10 +70,12 @@ public class SelectionLockService {
         }
     }
 
+    // Convención única para la key del lock distribuido.
     private String selectionLockKey(String sessionId) {
         return "lock:session:" + sessionId + ":selection";
     }
 
+    // Unifica detección de fallos Redis/Redisson para mapearlos a error de dominio.
     private boolean isRedisUnavailable(Throwable throwable) {
         Throwable current = throwable;
         while (current != null) {

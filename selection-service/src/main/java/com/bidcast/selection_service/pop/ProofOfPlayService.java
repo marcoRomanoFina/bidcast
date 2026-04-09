@@ -2,10 +2,10 @@ package com.bidcast.selection_service.pop;
 
 import com.bidcast.selection_service.offer.OfferInfrastructureService;
 import com.bidcast.selection_service.offer.SessionOfferRepository;
-import com.bidcast.selection_service.selection.ReceiptTokenService;
-import com.bidcast.selection_service.selection.ValidatedReceipt;
 import com.bidcast.selection_service.core.exception.InvalidPlayReceiptException;
 import com.bidcast.selection_service.core.exception.SelectionInfrastructureUnavailableException;
+import com.bidcast.selection_service.receipt.ReceiptTokenService;
+import com.bidcast.selection_service.receipt.ValidatedReceipt;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -41,10 +41,17 @@ public class ProofOfPlayService {
     private final SessionOfferRepository sessionOfferRepository;
 
     private static final long MAX_RECEIPT_AGE_SECONDS = 600;
-    private static final Duration CAMPAIGN_RECENCY_TTL = Duration.ofHours(12);
+    private static final Duration CAMPAIGN_RECENCY_TTL = Duration.ofMinutes(15);
 
     /**
-     * Procesa una confirmación de reproducción (PoP)
+     * Procesa una confirmación de reproducción (PoP).
+     *
+     * Orden importante:
+     * 1. validar receipt
+     * 2. resolver idempotencia rápida
+     * 3. persistir el hecho real en DB
+     * 4. marcar idempotencia en Redis
+     * 5. actualizar señales operativas como recencia global
      */
     public void recordPlay(PopRequest request) {
         try {
@@ -83,7 +90,7 @@ public class ProofOfPlayService {
         }
     }
 
-    //metodo privado para validar un PoP
+    // Valida que el request realmente corresponda a un receipt emitido por selection-service.
     private ValidatedReceipt validateTicket(PopRequest request) {
         try {
             return receiptTokenService.validateAndExtract(
@@ -98,7 +105,7 @@ public class ProofOfPlayService {
         }
     }
 
-    // metodo privado para chequear si esta procesado un PoP
+    // Idempotencia rápida en Redis para evitar doble procesamiento inmediato.
     private boolean isAlreadyProcessed(String receiptId) {
         String key = "pop:processed:" + receiptId;
         return Optional.ofNullable(redisTemplate.opsForValue().setIfAbsent(key, "processing", Duration.ofHours(2)))
@@ -106,12 +113,13 @@ public class ProofOfPlayService {
                 .orElse(false);
     }
 
+    // Marca el receipt como ya procesado para futuras repeticiones del mismo PoP.
     private void markAsProcessed(String receiptId) {
         String key = "pop:processed:" + receiptId;
         redisTemplate.opsForValue().set(key, "processed", Duration.ofHours(2));
     }
 
-    // metodo privado para guardar el PoP cobrado
+    // Persistencia durable del hecho real de reproducción.
     private boolean persistProofOfPlayIfAbsent(PopRequest request, ValidatedReceipt validated) {
         ProofOfPlay pop = ProofOfPlay.builder()
                 .sessionId(request.sessionId())
@@ -129,6 +137,7 @@ public class ProofOfPlayService {
         }
     }
 
+    // Registra la última reproducción observada de una campaign para ajustar el scoring global.
     private void registerCampaignPlayback(String sessionId, UUID offerId) {
         sessionOfferRepository.findById(offerId).ifPresent(offer -> {
             String key = String.format("session:%s:campaign:%s:last_played", sessionId, offer.getCampaignId());
@@ -136,6 +145,7 @@ public class ProofOfPlayService {
         });
     }
 
+    // Traduce distintos tipos de fallos Redis/Redisson a una señal común de infraestructura.
     private boolean isRedisUnavailable(Throwable throwable) {
         Throwable current = throwable;
         while (current != null) {

@@ -12,11 +12,19 @@ import java.time.Duration;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
-import java.util.stream.Collectors;
 
 /**
- en esta clase se separa gestión técnica de la infraestructura Redis (Hot Data).
- Realiza las operaciones atómicas de inyección y lectura
+ * Esta clase encapsula toda la infraestructura caliente de Redis para offers.
+ *
+ * La idea es separar:
+ * - estado persistente y auditable en PostgreSQL
+ * - estado operativo y efímero en Redis
+ *
+ * Acá viven las primitivas de bajo nivel que usa el hot path:
+ * - indexar offers activas por session
+ * - guardar metadata compacta de cada offer
+ * - mantener budget caliente en centavos
+ * - bloquear creatives por device durante el cooldown local
  */
 @Service
 @RequiredArgsConstructor
@@ -26,15 +34,17 @@ public class OfferInfrastructureService {
     private final StringRedisTemplate redisTemplate;
     private final ObjectMapper objectMapper;
 
-    // TTL 30 minutos de inactividad
-    private static final Duration SESSION_TTL = Duration.ofMinutes(30);
+    // Si una session deja de usarse, su hot state expira solo
+    private static final Duration SESSION_TTL = Duration.ofMinutes(60);
     private static final String ACTIVE_OFFERS_KEY = "session:%s:active_offers";
     private static final String OFFER_KEY = "session:%s:offer:%s";
     private static final String DEVICE_CREATIVE_COOLDOWN_KEY = "session:%s:device:%s:creative:%s:cooldown";
 
     /*
-        Refresca el TTL de las claves asociadas a una sesión y sus offers usando Pipelining.
-        Manda todas las órdenes de expiración en un solo viaje de red.
+        Refresca el TTL de todas las claves calientes relacionadas a una session.
+
+        Se usa cuando hay actividad real (selection o PoP) para extender la vida
+        del hot state sin tener que reescribirlo completo.
      */
     public void extendTTL(String sessionId, List<String> offerIds) {
         if (offerIds == null || offerIds.isEmpty()) return;
@@ -52,40 +62,45 @@ public class OfferInfrastructureService {
     }
 
     /**
-      Inyecta el estado completo de una offer en Redis con TTL automatico utilizando un Hash.
-      Utiliza Pipelining para minimizar RTT.
+     * Inyecta una offer completa en Redis.
+     *
+     * Guarda dos piezas:
+     * - budget: saldo operativo en centavos
+     * - metadata: snapshot JSON compacto de la offer
+     *
+     * Además registra el offerId en el set de offers activas de la session.
      */
     public void injectIntoRedis(SessionOffer offer, long remainingCents) {
         try {
             String offerId = offer.getId().toString();
             String sessionId = offer.getSessionId();
             
-            // usamos metadata asi no inyectamos toda la entity
+            // Se serializa metadata compacta para no depender del modelo JPA completo en Redis.
             OfferMetadata metadata = OfferMetadata.fromEntity(offer);
             String metadataJson = objectMapper.writeValueAsString(metadata);
 
-            // usamos pipeline asi vamos solo una vez a redis
+            // Se usa pipeline para reducir viajes de red y mantener la operación compacta.
             redisTemplate.executePipelined((RedisCallback<Object>) connection -> {
                 byte[] offerKey = offerKey(sessionId, offerId).getBytes();
                 byte[] sessionSetKey = activeOffersKey(sessionId).getBytes();
                 
-                // 1. Inyectamos en un hash
+                // 1. Persistimos budget y metadata en el hash principal de la offer.
                 connection.hashCommands().hSet(offerKey, "budget".getBytes(), String.valueOf(remainingCents).getBytes());
                 connection.hashCommands().hSet(offerKey, "metadata".getBytes(), metadataJson.getBytes());
                 
-                // 2. Seteamos TTL al hash
+                // 2. Aseguramos expiración automática.
                 connection.keyCommands().expire(offerKey, SESSION_TTL.getSeconds());
 
-                // 3. Inyectamos en el set de offers activas de la sesión
+                // 3. Registramos la offer como activa dentro de la session.
                 connection.setCommands().sAdd(sessionSetKey, offerId.getBytes());
                 
-                // 4. Refrescamos TTL del Set de la sesión
+                // 4. Refrescamos también el índice de la session.
                 connection.keyCommands().expire(sessionSetKey, SESSION_TTL.getSeconds());
                 
                 return null;
             });
 
-            log.debug("Offer {} injected into Redis hash with a 30m TTL via pipeline.", offerId);
+            log.debug("Offer {} injected into Redis hash with a 60m TTL via pipeline.", offerId);
 
         } catch (Exception e) {
             log.error("Critical failure injecting offer {} into Redis: {}", offer.getId(), e.getMessage());
@@ -94,7 +109,9 @@ public class OfferInfrastructureService {
     }
 
     /**
-     * Elimina una offer del índice activo de la sesión.
+     * Saca una offer del set de activas sin borrar necesariamente todo su hash.
+     *
+     * Esto se usa, por ejemplo, cuando una offer queda EXHAUSTED y ya no debe competir.
      */
     public void removeFromActiveIndex(String sessionId, String offerId) {
         String key = activeOffersKey(sessionId);
@@ -102,7 +119,7 @@ public class OfferInfrastructureService {
     }
 
     /**
-     * Limpia todo el rastro de una offer en Redis.
+     * Borra la clave principal de una offer del hot state.
      */
     public void purgeOffer(String sessionId, String offerId) {
         String offerKey = offerKey(sessionId, offerId);
@@ -110,13 +127,21 @@ public class OfferInfrastructureService {
     }
 
     /**
-     * Borra el índice de una sesión completa.
+     * Borra el índice de offers activas de una session completa.
+     *
+     * Se usa al final del settlement/cierre para limpiar el hot path.
      */
     public void purgeSessionIndex(String sessionId) {
         String key = activeOffersKey(sessionId);
         redisTemplate.delete(key);
     }
 
+    /**
+     * Bloquea un creative para un device puntual durante su cooldown local.
+     *
+     * Este bloqueo nace al devolver la selección, no al llegar el PoP, para evitar
+     * que dos refills casi consecutivos reciclen el mismo creative en el mismo device.
+     */
     public void blockCreativeForDevice(String sessionId, String deviceId, String creativeId, Duration cooldown) {
         if (cooldown == null || cooldown.isZero() || cooldown.isNegative()) {
             return;
@@ -124,19 +149,49 @@ public class OfferInfrastructureService {
         redisTemplate.opsForValue().set(deviceCreativeCooldownKey(sessionId, deviceId, creativeId), "1", cooldown);
     }
 
+    /**
+     * Chequeo puntual de bloqueo local por device + creative.
+     */
     public boolean isCreativeBlockedForDevice(String sessionId, String deviceId, String creativeId) {
         return Boolean.TRUE.equals(redisTemplate.hasKey(deviceCreativeCooldownKey(sessionId, deviceId, creativeId)));
     }
 
+    /**
+     * Dada una lista de creatives candidatos, devuelve cuáles están hoy bloqueados
+     * localmente para ese device.
+     */
     public Set<String> filterBlockedCreativeIds(String sessionId, String deviceId, List<String> creativeIds) {
         if (creativeIds == null || creativeIds.isEmpty()) {
             return Set.of();
         }
-        return creativeIds.stream()
-                .filter(creativeId -> isCreativeBlockedForDevice(sessionId, deviceId, creativeId))
-                .collect(Collectors.toSet());
+
+        List<Object> results = redisTemplate.executePipelined((RedisCallback<Object>) connection -> {
+            for (String creativeId : creativeIds) {
+                byte[] key = deviceCreativeCooldownKey(sessionId, deviceId, creativeId).getBytes();
+                connection.keyCommands().exists(key);
+            }
+            return null;
+        });
+
+        if (results == null || results.isEmpty()) {
+            return Set.of();
+        }
+
+        Set<String> blocked = new java.util.HashSet<>();
+        for (int i = 0; i < creativeIds.size() && i < results.size(); i++) {
+            Object raw = results.get(i);
+            if (Boolean.TRUE.equals(raw) || (raw instanceof Number number && number.longValue() > 0)) {
+                blocked.add(creativeIds.get(i));
+            }
+        }
+        return blocked;
     }
 
+    /**
+     * Lee el budget operativo desde Redis.
+     *
+     * Si no existe, el caller decide si rehidrata o si falla.
+     */
     public Optional<Long> getBudgetCents(String sessionId, String offerId) {
         Object rawBudget = redisTemplate.opsForHash().get(offerKey(sessionId, offerId), "budget");
         if (rawBudget == null) {
@@ -145,12 +200,20 @@ public class OfferInfrastructureService {
         return Optional.of(Long.parseLong(rawBudget.toString()));
     }
 
+    /**
+     * Descuenta presupuesto en el hot state.
+     *
+     * Devuelve el saldo resultante si la key existe.
+     */
     public Optional<Long> decrementBudgetCents(String sessionId, String offerId, long amountCents) {
         return Optional.ofNullable(
                 redisTemplate.opsForHash().increment(offerKey(sessionId, offerId), "budget", -amountCents)
         );
     }
 
+    /**
+     * Compensa un descuento previo cuando una selección no puede concretarse.
+     */
     public Optional<Long> incrementBudgetCents(String sessionId, String offerId, long amountCents) {
         return Optional.ofNullable(
                 redisTemplate.opsForHash().increment(offerKey(sessionId, offerId), "budget", amountCents)

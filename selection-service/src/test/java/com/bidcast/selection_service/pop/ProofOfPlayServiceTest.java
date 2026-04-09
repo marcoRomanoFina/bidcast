@@ -1,11 +1,10 @@
 package com.bidcast.selection_service.pop;
 
 import com.bidcast.selection_service.offer.OfferInfrastructureService;
-import com.bidcast.selection_service.offer.OfferPersistenceService;
 import com.bidcast.selection_service.offer.SessionOfferRepository;
-import com.bidcast.selection_service.selection.ReceiptTokenService;
-import com.bidcast.selection_service.selection.ValidatedReceipt;
 import com.bidcast.selection_service.core.exception.InvalidPlayReceiptException;
+import com.bidcast.selection_service.receipt.ReceiptTokenService;
+import com.bidcast.selection_service.receipt.ValidatedReceipt;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;

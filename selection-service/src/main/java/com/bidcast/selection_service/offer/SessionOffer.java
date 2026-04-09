@@ -14,6 +14,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.OptionalLong;
 import java.util.Set;
 import java.util.UUID;
 
@@ -21,7 +22,7 @@ import java.util.UUID;
 @Table(
     name = "session_offers",
     indexes = {
-        // indice para buscar rapido
+        // Lookup principal: traer offers de una session por estado operativo.
         @Index(name = "idx_session_offer_lookup", columnList = "sessionId, status")
     }
 )
@@ -30,6 +31,12 @@ import java.util.UUID;
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @AllArgsConstructor
 @Builder
+// SessionOffer es la entrada económica de una campaign dentro de una session.
+//
+// - una campaign entra una sola vez a competir
+// - esa entrada tiene presupuesto, precio por slot y varios creatives snapshot
+// - el engine elige la offer y luego rota creatives dentro de ella
+
 public class SessionOffer {
 
     @Id
@@ -102,7 +109,7 @@ public class SessionOffer {
     private Long version;
 
     /**
-     * Activa la offer tras la reserva exitosa de fondos.
+     * Activa la offer después de reservar correctamente sus fondos iniciales.
      */
     public void activate() {
         if (this.status != OfferStatus.PENDING_RESERVATION) {
@@ -112,33 +119,36 @@ public class SessionOffer {
     }
 
     /**
-     * Marca la offer como fallida durante el proceso de registro.
+     * Marca una falla de negocio o de alta.
      */
     public void fail() {
         this.status = OfferStatus.FAILED;
     }
 
     /**
-     * Marca la offer con un fallo crítico de infraestructura.
+     * Marca una falla crítica de infraestructura.
      */
     public void markCriticalFailure() {
         this.status = OfferStatus.FAILED_CRITICAL;
     }
 
     /**
-     * Marca la offer como agotada (sin presupuesto).
+     * Marca que la offer ya no tiene saldo suficiente para financiar más reproducciones.
      */
     public void exhaust() {
         this.status = OfferStatus.EXHAUSTED;
     }
 
     /**
-     * Cierra la offer al finalizar la sesión.
+     * Cierra definitivamente la offer cuando la session terminó.
      */
     public void close() {
         this.status = OfferStatus.CLOSED;
     }
 
+    /**
+     * Devuelve el creative al que hoy apunta el puntero, sin modificar estado.
+     */
     public Optional<CreativeSnapshot> currentCreative() {
         if (creatives == null || creatives.isEmpty()) {
             return Optional.empty();
@@ -148,6 +158,12 @@ public class SessionOffer {
         return Optional.of(creatives.get(safeIndex));
     }
 
+    /**
+     * Busca el próximo creative elegible sin mover el puntero.
+     *
+     * Esto sirve cuando primero querés mirar candidatos y recién avanzar el índice
+     * si finalmente ese creative termina siendo seleccionado.
+     */
     public Optional<CreativeSnapshot> nextEligibleCreative(Set<String> excludedCreativeIds) {
         if (creatives == null || creatives.isEmpty()) {
             return Optional.empty();
@@ -168,6 +184,9 @@ public class SessionOffer {
         return Optional.empty();
     }
 
+    /**
+     * Avanza el puntero circular una posición y devuelve el creative previo.
+     */
     public Optional<CreativeSnapshot> advanceCreativePointer() {
         if (creatives == null || creatives.isEmpty()) {
             return Optional.empty();
@@ -179,6 +198,10 @@ public class SessionOffer {
         return Optional.of(selected);
     }
 
+    /**
+     * Recorre circularmente hasta encontrar un creative no excluido y deja el
+     * puntero parado después de ese creative.
+     */
     public Optional<CreativeSnapshot> advanceToNextEligibleCreative(Set<String> excludedCreativeIds) {
         if (creatives == null || creatives.isEmpty()) {
             return Optional.empty();
@@ -200,6 +223,12 @@ public class SessionOffer {
         return Optional.empty();
     }
 
+    /**
+     * Mueve el puntero como si el creative indicado hubiese sido elegido.
+     *
+     * Se usa cuando el scoring ya decidió un creative concreto y queremos dejar
+     * persistido el siguiente punto de rotación.
+     */
     public Optional<CreativeSnapshot> advanceToCreative(String creativeId) {
         if (creatives == null || creatives.isEmpty() || creativeId == null || creativeId.isBlank()) {
             return Optional.empty();
@@ -214,5 +243,21 @@ public class SessionOffer {
         }
 
         return Optional.empty();
+    }
+
+    /**
+     * Devuelve el menor slotCount de la offer.
+     *
+     * Como pricePerSlot es constante por offer, esto alcanza para saber cuál es
+     * el costo mínimo posible de reproducir cualquiera de sus creatives.
+     */
+    public OptionalLong minimumSlotCount() {
+        if (creatives == null || creatives.isEmpty()) {
+            return OptionalLong.empty();
+        }
+
+        return creatives.stream()
+                .mapToLong(CreativeSnapshot::slotCount)
+                .min();
     }
 }

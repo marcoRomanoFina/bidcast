@@ -8,11 +8,12 @@ import org.springframework.stereotype.Repository;
 import java.math.BigDecimal;
 import java.util.UUID;
 
-// queries para los PoP
+// Repository de PoP.
+// Se usa tanto para persistencia auditada como para calcular gasto real en settlement/rehydration.
 @Repository
 public interface ProofOfPlayRepository extends JpaRepository<ProofOfPlay, UUID> {
 
-    // para no devolver null y evitar un nullpointerEx
+    // Devuelve 0 si todavía no hay reproducciones, así el caller no tiene que defender nulls.
     @Query("SELECT COALESCE(SUM(p.costCharged), 0.0) FROM ProofOfPlay p WHERE p.offerId = :offerId")
     BigDecimal sumCostByOfferId(@Param("offerId") String offerId);
 }

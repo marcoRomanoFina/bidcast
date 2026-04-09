@@ -8,31 +8,34 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 
-@Schema(description = "Alta de una offer economica por campaign dentro de una session")
+// DTO de entrada para registrar una SessionOffer.
+// Representa el momento en que una campaign entra a competir dentro de una session
+// con un presupuesto reservado y reglas de reproduccion propias(por ahora solo frequencia/device).
+@Schema(description = "Request to register a priced offer for a campaign inside a session")
 public record CreateSessionOfferRequest(
-        @Schema(description = "Session donde la offer va a competir", example = "session-1")
+        @Schema(description = "Session where the offer will compete", example = "session-1")
         @NotBlank(message = "Session id is required")
         String sessionId,
 
-        @Schema(description = "Advertiser duenio de la offer", example = "advertiser-1")
+        @Schema(description = "Advertiser that owns the offer", example = "advertiser-1")
         @NotBlank(message = "Advertiser id is required")
         String advertiserId,
 
-        @Schema(description = "Campaign del advertisement-service que aporta creatives")
+        @Schema(description = "Campaign from advertisement-service that provides the creatives")
         @NotNull(message = "Campaign id is required")
         UUID campaignId,
 
-        @Schema(description = "Budget total reservado para la offer", example = "100.00")
+        @Schema(description = "Total budget reserved for the offer", example = "100.00")
         @NotNull(message = "Total budget is required")
         @Positive(message = "Total budget must be positive")
         BigDecimal totalBudget,
 
-        @Schema(description = "Precio base por slot de 5 segundos", example = "0.50")
+        @Schema(description = "Base price per 5-second slot", example = "0.50")
         @NotNull(message = "Price per slot is required")
         @Positive(message = "Price per slot must be positive")
         BigDecimal pricePerSlot,
 
-        @Schema(description = "Cooldown local por device para un mismo creative, en segundos", example = "300")
+        @Schema(description = "Per-device cooldown for the same creative, in seconds", example = "300")
         @NotNull(message = "Device cooldown is required")
         @Positive(message = "Device cooldown must be positive")
         Integer deviceCooldownSeconds

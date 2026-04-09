@@ -1,4 +1,4 @@
-package com.bidcast.selection_service.selection;
+package com.bidcast.selection_service.receipt;
 
 import com.bidcast.selection_service.core.exception.InvalidReceiptSignatureException;
 import lombok.extern.slf4j.Slf4j;

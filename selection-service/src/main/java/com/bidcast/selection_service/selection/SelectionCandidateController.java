@@ -20,24 +20,26 @@ import lombok.RequiredArgsConstructor;
 @RestController
 @RequestMapping("/api/v1/selection")
 @RequiredArgsConstructor
-@Tag(name = "Selection", description = "Endpoints usados por el device player para pedir reproducciones pagas ya confirmadas")
+@Tag(name = "Selection", description = "Endpoints used by the device player to request already confirmed paid plays")
+// Controller del hot path de selección.
+// Su trabajo es exponer el endpoint; la lógica real vive abajo en services especializados.
 public class SelectionCandidateController {
 
     private final SelectionCandidateService selectionCandidateService;
 
     @PostMapping("/candidates")
     @Operation(
-            summary = "Selecciona las proximas reproducciones para un device",
-            description = "Devuelve hasta N reproducciones pagas ya reservadas para un device dentro de una session. "
-                    + "Si una seleccion se devuelve, su budget ya fue consumido del hot state."
+            summary = "Select the next plays for a device",
+            description = "Returns up to N already reserved paid plays for a device inside a session. "
+                    + "If a selection is returned, its budget has already been consumed from hot state."
     )
     @ApiResponse(
             responseCode = "200",
-            description = "Lista de reproducciones seleccionadas",
+            description = "List of selected plays",
             content = @Content(array = @ArraySchema(schema = @Schema(implementation = SelectedCandidate.class)))
     )
-    @ApiResponse(responseCode = "409", description = "La session ya esta siendo procesada por otro worker")
-    @ApiResponse(responseCode = "503", description = "Redis o Redisson no esta disponible en el hot path")
+    @ApiResponse(responseCode = "409", description = "The session is already being processed by another worker")
+    @ApiResponse(responseCode = "503", description = "Redis or Redisson is unavailable in the hot path")
     public ResponseEntity<List<SelectedCandidate>> selectCandidates(
             @RequestBody @Valid CandidateSelectionRequest request) {
         return ResponseEntity.ok(selectionCandidateService.selectCandidates(request));
