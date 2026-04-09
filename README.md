@@ -1,96 +1,100 @@
-# 🎬Bidcast
+# Bidcast
 
-Bidcast is a personal microservices project inspired by AdTech real-time bidding (RTB) platforms.
-It allows advertisers to bid for available time slots on physical display devices, while device owners monetize their screen time by selling ad space through real-time auctions.
-The platform manages auctions, wallets, billing, and payments across multiple services, and is designed to practice concurrency, consistency, idempotency, and asynchronous service-to-service communication.
+Bidcast is a personal microservices project inspired by AdTech systems, focused on slot-based ad delivery on physical screens rather than classic impression-by-impression RTB.
+Advertisers compete to occupy playback slots, devices request the next candidates to show, and the platform coordinates wallet freezes, proof-of-play validation, and settlement across services.
 
-This project is intentionally infrastructure-focused. The goal is to gain hands-on experience with real-world scenarios involving payments, retries, distributed state, and asynchronous messaging.
+The project is intentionally backend- and infrastructure-heavy. The goal is to practice concurrency, idempotency, distributed state, payments, asynchronous messaging, and recovery patterns in a realistic multi-service environment.
 
-> Work in progress focused on distributed systems and backend engineering, not on shipping a polished end-user product.
+> Work in progress centered on distributed systems and backend engineering, not on a polished end-user product.
 
 ## What This Project Explores
 
-- real-time auction execution for ad delivery on physical screens
+- slot-based ad selection for playback on physical screens
 - stateless authentication with JWT at the gateway edge
-- internal wallet and settlement flows with idempotency protections
-- external payment integration through Mercado Pago webhooks
+- internal wallet freezing and settlement flows
+- proof-of-play validation with signed receipts
 - asynchronous communication with RabbitMQ
-- distributed state and fast-path coordination with Redis
-- transactional boundaries, outbox delivery, and reconciliation jobs
+- hot-path state and coordination with Redis and Redisson
+- transactional outbox delivery
+- rehydration and recovery after hot-state loss
 - unit, web, and integration testing with Testcontainers
 
 ## Architecture
 
-Bidcast follows a service-oriented architecture with clear separation between identity, routing, auction execution, financial accounting, external billing, and inventory management.
+Bidcast follows a service-oriented architecture with a separation between identity, routing, inventory, campaign management, selection, wallet accounting, and billing.
 
 - PostgreSQL is used where auditability and transactional guarantees matter.
-- Redis is used for low-latency state, distributed coordination, and rate limiting.
+- Redis is used for hot-path state, cooldowns, locks, and fast operational reads.
 - RabbitMQ is used for cross-service event delivery.
 
-### Services
+## Services
+
+Services currently present in the repository:
 
 - `gateway-service`: API gateway, JWT validation, RBAC, header normalization, rate limiting, CORS
 - `user-service`: registration, login, password hashing, JWT issuance
-- `device-service`: device inventory and owner-based lookup
-- `advertisement-service`: campaign creation and advertiser campaign management
-- `auction-service`: session bids, auction execution, proof-of-play validation, outbox-based settlement orchestration
+- `venue-service`: venue and device inventory
+- `advertisement-service`: campaign and creative management
+- `selection-service`: session offers, candidate selection, proof-of-play validation, Redis hot state, outbox-driven settlement orchestration
 - `wallet-service`: internal ledger, credits, debits, frozen balance handling, settlement consumption
 - `billing-service`: Mercado Pago checkout preference creation and webhook reconciliation
 
-## Main Flow
+## Current Selection Model
 
-At a high level, the platform works like this:
+The core delivery flow currently lives in `selection-service`:
 
-1. an advertiser registers and authenticates through `user-service`
-2. the `gateway-service` validates the JWT and forwards verified identity to internal services
-3. advertisers create campaigns and allocate budget
-4. devices participate in active sessions
-5. `auction-service` receives bids, selects a winner, and issues a receipt token
-6. when the ad is confirmed as displayed, proof of play is recorded
-7. settlement is published through the outbox and consumed by `wallet-service`
-8. wallet balance can be topped up through `billing-service`
+- advertisers register a `SessionOffer` for a session
+- each offer has a `pricePerSlot`, total budget, cooldown configuration, and a list of creative snapshots
+- the service returns the next `N` candidates for a device
+- each candidate already includes a concrete creative, slot duration, and a signed receipt
+- local `device + creative` cooldown is reserved when the candidate is returned
+- `Proof of Play` confirms actual playback, charges the real total (`pricePerSlot * slotCount`), and updates global campaign recency
 
-### Auction / Settlement Flow
+This is closer to continuous playback selection than to classic web RTB.
+
+### Selection / Settlement Flow
 
 ```mermaid
 sequenceDiagram
     participant D as Device
-    participant A as Auction Service
+    participant S as Selection Service
     participant W as Wallet Service
     participant R as RabbitMQ
 
-    D->>A: Request ad
-    A->>W: Freeze bid budget
-    W-->>A: Freeze accepted
-    A-->>D: Winning ad + receipt
-    D->>A: Proof of play
-    A->>A: Validate receipt and persist PoP
-    A->>R: Publish settlement event (outbox)
-    R-->>W: Debit frozen balance
+    D->>S: Request next N candidates
+    S->>W: Freeze offer budget
+    W-->>S: Freeze accepted
+    S->>S: Reserve device+creative cooldown in Redis
+    S-->>D: Candidates + signed receipts
+    D->>S: Proof of play
+    S->>S: Validate receipt, persist PoP, decrement hot budget
+    S->>R: Publish settlement event (outbox)
+    R-->>W: Consume settlement against frozen balance
 ```
 
 ## Reliability Patterns
 
-This project implements several reliability patterns commonly used in distributed systems:
+The project includes several patterns commonly used in distributed systems:
 
-- multi-layer idempotency (fast-path checks + database constraints)
-- optimistic locking and duplicate handling for financial flows
+- multi-layer idempotency for `PoP`
+- signed receipt validation before charging playback
+- Redis hot state plus DB-backed rehydration
+- Redisson lock per session for concurrent selection
 - transactional outbox for durable event publication
-- reconciliation jobs for stale or incomplete workflows
-- signed receipt validation before final settlement
+- settlement reconciliation against persisted `ProofOfPlay`
 - gateway-side identity shielding using trusted internal headers
 - Redis-backed distributed rate limiting
 
-Some of these patterns go beyond what a typical MVP would require, but they were intentionally included to explore real-world trade-offs in consistency, retries, and distributed state.
+Some of these go beyond what a minimal MVP would need, but they are included deliberately to explore real trade-offs around consistency, retries, and operational safety.
 
 ## Tech Stack
 
 - Java 21
 - Spring Boot 4.0.3
-- Spring MVC and Spring Cloud Gateway WebFlux
+- Spring MVC and Spring Cloud Gateway
 - Spring Security
 - PostgreSQL
-- Redis (Redisson)
+- Redis and Redisson
 - RabbitMQ
 - JJWT
 - Testcontainers
@@ -103,22 +107,20 @@ Some of these patterns go beyond what a typical MVP would require, but they were
 bidcast/
 ├── gateway-service/
 ├── user-service/
-├── device-service/
+├── venue-service/
 ├── advertisement-service/
-├── auction-service/
+├── selection-service/
 ├── wallet-service/
 ├── billing-service/
 ├── docker-compose.yml
 └── init.sql
 ```
 
-Each service has its own `README.md` with implementation notes and testing details.(work in progress)
+Each service has its own `README.md` with module-specific notes and testing details.
 
 ## Running The Project
 
-### 1. Start infrastructure and available services
-
-The repository includes a root [`docker-compose.yml`](docker-compose.yml) that starts:
+The root [`docker-compose.yml`](docker-compose.yml) currently starts:
 
 - PostgreSQL
 - Redis
@@ -126,8 +128,9 @@ The repository includes a root [`docker-compose.yml`](docker-compose.yml) that s
 - `gateway-service`
 - `user-service`
 - `wallet-service`
-- `auction-service`
+- `selection-service`
 - `billing-service`
+- `venue-service`
 
 Run:
 
@@ -135,8 +138,9 @@ Run:
 docker compose up --build
 ```
 
+Some services in the repository, such as `advertisement-service`, may be developed and tested independently even if they are not currently included in the default compose startup.
 
-Use the corresponding service `README` for required environment variables and endpoint details.
+Check the corresponding service `README` files for environment variables and endpoint details.
 
 ## Testing
 
@@ -146,10 +150,11 @@ The codebase uses a mix of:
 - web/controller tests for HTTP contracts
 - integration tests with Testcontainers for services that depend on PostgreSQL, Redis, or RabbitMQ
 
-Most service modules can be tested independently:
+Example:
 
 ```bash
-cd auction-service
-mvn test
+cd selection-service
+./mvnw clean test
 ```
-Some integration suites require Docker Desktop or Docker Engine because they spin up real infrastructure with Testcontainers.
+
+Some integration suites require Docker Desktop or Docker Engine because they start real infrastructure with Testcontainers.

@@ -4,7 +4,7 @@ The `gateway-service` is the infrastructure component responsible for centralizi
 
 ## Service Responsibilities
 
-1.  **Dynamic and reactive routing:** orchestration of requests toward internal microservices (`user-service`, `auction-service`, `billing-service`, etc.) through a non-blocking architecture.
+1.  **Dynamic and reactive routing:** orchestration of requests toward internal microservices (`user-service`, `selection-service`, `billing-service`, etc.) through a non-blocking architecture.
 2.  **Perimeter security (Edge Auth):** centralized JWT validation and user identity shielding before propagating the request.
 3.  **Header normalization:** systematic removal of sensitive externally supplied headers and injection of verified identity (`X-User-Id`, `X-User-Email`, `X-User-Roles`) for safe internal consumption.
 4.  **Traffic control (Rate Limiting):** implementation of distributed request limits to mitigate denial-of-service (DoS) attacks and API abuse.
@@ -72,12 +72,12 @@ private Mono<Claims> validateRoles(Claims claims, Config config, String path) {
 ### Distributed rate limiting
 The gateway uses the **token bucket** algorithm backed by **Redis**. This guarantees consistent request quotas even in horizontal deployments (multiple gateway instances), because limiter state is shared globally.
 
-The current auction route configuration applies `RequestRateLimiter` on top of a `KeyResolver` based on `X-User-Id`, which allows limiting by authenticated user instead of by IP.
+The current selection route configuration applies `RequestRateLimiter` on top of a `KeyResolver` based on `X-User-Id`, which allows limiting by authenticated user instead of by IP.
 
 ```properties
-spring.cloud.gateway.server.webflux.routes[4].id=auction-service
-spring.cloud.gateway.server.webflux.routes[4].uri=http://auction-service:8084
-spring.cloud.gateway.server.webflux.routes[4].predicates[0]=Path=/api/v1/auction/**, /api/v1/bids/**
+spring.cloud.gateway.server.webflux.routes[4].id=selection-service
+spring.cloud.gateway.server.webflux.routes[4].uri=http://selection-service:8084
+spring.cloud.gateway.server.webflux.routes[4].predicates[0]=Path=/api/v1/selection/**, /api/v1/session-offers/**
 spring.cloud.gateway.server.webflux.routes[4].filters[0]=AuthenticationFilter=PUBLISHER,ADMIN
 spring.cloud.gateway.server.webflux.routes[4].filters[1].name=RequestRateLimiter
 spring.cloud.gateway.server.webflux.routes[4].filters[1].args.redis-rate-limiter.replenishRate=50

@@ -1,11 +1,14 @@
 package com.bidcast.advertisement_service.campaign;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.math.BigDecimal;
+import java.util.Optional;
 import java.util.UUID;
 
 import org.junit.jupiter.api.Test;
@@ -86,5 +89,38 @@ public class CampaignServiceTest {
         verify(campaignRepository).save(campaignCaptor.capture());
 
         assertEquals("Campaña prolija", campaignCaptor.getValue().getName());
+    }
+
+    @Test
+    void should_returnCampaign_when_campaignExists() {
+        UUID campaignId = UUID.randomUUID();
+        Campaign campaign = Campaign.builder()
+                .id(campaignId)
+                .name("Campaña Snapshot")
+                .advertiserId(UUID.randomUUID())
+                .budget(new BigDecimal("1000.00"))
+                .bidCpm(new BigDecimal("3.00"))
+                .status(CampaignStatusType.ACTIVE)
+                .build();
+
+        when(campaignRepository.findById(eq(campaignId))).thenReturn(Optional.of(campaign));
+
+        Campaign result = campaignService.getCampaign(campaignId);
+
+        assertEquals(campaignId, result.getId());
+        assertEquals("Campaña Snapshot", result.getName());
+    }
+
+    @Test
+    void should_throwWhen_campaignDoesNotExist() {
+        UUID campaignId = UUID.randomUUID();
+        when(campaignRepository.findById(eq(campaignId))).thenReturn(Optional.empty());
+
+        IllegalArgumentException exception = assertThrows(
+                IllegalArgumentException.class,
+                () -> campaignService.getCampaign(campaignId)
+        );
+
+        assertEquals("Campaign not found: " + campaignId, exception.getMessage());
     }
 }

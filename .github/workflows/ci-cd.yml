@@ -19,12 +19,12 @@ jobs:
           filters: |
             advertisement:
               - 'advertisement-service/**'
-            auction:
-              - 'auction-service/**'
+            selection:
+              - 'selection-service/**'
             billing:
               - 'billing-service/**'
-            device:
-              - 'device-service/**'
+            venue:
+              - 'venue-service/**'
             gateway:
               - 'gateway-service/**'
             user:
@@ -54,7 +54,7 @@ jobs:
       - name: Build and Test with Maven
         env:
           JWT_SECRET_KEY: ${{ secrets.JWT_SECRET_KEY }}
-          AUCTION_RECEIPT_SECRET: ${{ secrets.AUCTION_RECEIPT_SECRET }}
+          SELECTION_RECEIPT_SECRET: ${{ secrets.SELECTION_RECEIPT_SECRET }}
           MP_ACCESS_TOKEN: 'TEST-ACCESS-TOKEN-FOR-CI'
           MP_WEBHOOK_SECRET: 'test_webhook_secret_for_ci'
         run: |

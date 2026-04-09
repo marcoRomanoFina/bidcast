@@ -77,11 +77,11 @@ services:
       - postgres
       - rabbitmq
 
-  auction-service:
+  selection-service:
     build:
-      context: ./auction-service
+      context: ./selection-service
       dockerfile: Dockerfile
-    container_name: bidcast-auction
+    container_name: bidcast-selection
     ports:
       - "8084:8084"
     environment:
@@ -93,7 +93,7 @@ services:
       - SPRING_RABBITMQ_HOST=rabbitmq
       - SPRING_RABBITMQ_USERNAME=${RABBITMQ_DEFAULT_USER:-guest}
       - SPRING_RABBITMQ_PASSWORD=${RABBITMQ_DEFAULT_PASS:-guest}
-      - AUCTION_RECEIPT_SECRET=${AUCTION_RECEIPT_SECRET}
+      - SELECTION_RECEIPT_SECRET=${SELECTION_RECEIPT_SECRET}
     depends_on:
       - postgres
       - redis
@@ -119,3 +119,18 @@ services:
     depends_on:
       - postgres
       - rabbitmq
+
+  venue-service:
+    build:
+      context: ./venue-service
+      dockerfile: Dockerfile
+    container_name: bidcast-venue
+    ports:
+      - "8085:8085"
+    environment:
+      - SPRING_PROFILES_ACTIVE=dev
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/bidcast
+      - SPRING_DATASOURCE_USERNAME=${POSTGRES_USER:-postgres}
+      - SPRING_DATASOURCE_PASSWORD=${POSTGRES_PASSWORD:-postgres}
+    depends_on:
+      - postgres
