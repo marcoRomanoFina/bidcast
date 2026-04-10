@@ -4,7 +4,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import org.springframework.amqp.core.TopicExchange;
-import org.springframework.amqp.support.converter.Jackson2JsonMessageConverter;
+import org.springframework.amqp.support.converter.JacksonJsonMessageConverter;
+import org.springframework.amqp.support.converter.MessageConverter;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
@@ -28,7 +29,7 @@ public class RabbitMQConfig {
     }
 
     @Bean
-    public Jackson2JsonMessageConverter jsonMessageConverter(ObjectMapper mapper) {
-        return new Jackson2JsonMessageConverter(mapper);
+    public MessageConverter jsonMessageConverter() {
+        return new JacksonJsonMessageConverter();
     }
 }
