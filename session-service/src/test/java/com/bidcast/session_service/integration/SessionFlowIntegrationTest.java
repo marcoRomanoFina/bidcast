@@ -34,7 +34,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 @SpringBootTest(properties = {
         "spring.task.scheduling.enabled=false",
-        "bidcast.session.presence.cleanup.enabled=false",
+        "adcast.session.presence.cleanup.enabled=false",
         "spring.jpa.hibernate.ddl-auto=create-drop"
 })
 @AutoConfigureMockMvc

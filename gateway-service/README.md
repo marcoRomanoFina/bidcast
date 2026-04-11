@@ -1,6 +1,6 @@
 # Gateway Service: Reactive Entry Point and Edge Security
 
-The `gateway-service` is the infrastructure component responsible for centralizing incoming traffic into the Bidcast ecosystem. It acts as a high-performance edge server, managing perimeter security, dynamic routing, and flow control (rate limiting) to protect the internal microservice topology.
+The `gateway-service` is the infrastructure component responsible for centralizing incoming traffic into the Adcast ecosystem. It acts as a high-performance edge server, managing perimeter security, dynamic routing, and flow control (rate limiting) to protect the internal microservice topology.
 
 ## Service Responsibilities
 

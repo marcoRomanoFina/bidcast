@@ -1,6 +1,6 @@
 # Venue Service: Venues and Devices Management
 
-The `venue-service` is the microservice responsible for managing venues and the physical devices associated with each venue in the Bidcast platform. Its responsibilities are to register venues, group devices under a venue, expose CRUD-style operations for both aggregates, and resolve queries by venue or owner so other services can locate deployed assets.
+The `venue-service` is the microservice responsible for managing venues and the physical devices associated with each venue in the Adcast platform. Its responsibilities are to register venues, group devices under a venue, expose CRUD-style operations for both aggregates, and resolve queries by venue or owner so other services can locate deployed assets.
 
 ## Tech Stack
 

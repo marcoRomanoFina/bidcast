@@ -20,8 +20,8 @@ public class CorsConfig {
         CorsConfiguration config = new CorsConfiguration();
 
         // Lista configurable para no dejar CORS completamente abierto en producción.
-        String rawOrigins = System.getProperty("bidcast.cors.allowed-origins",
-                System.getenv().getOrDefault("BIDCAST_CORS_ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:5173"));
+        String rawOrigins = System.getProperty("adcast.cors.allowed-origins",
+                System.getenv().getOrDefault("ADCAST_CORS_ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:5173"));
         config.setAllowedOrigins(Arrays.stream(rawOrigins.split(","))
                 .map(String::trim)
                 .filter(origin -> !origin.isBlank())

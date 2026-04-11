@@ -1,4 +1,4 @@
-# Bidcast
+# Adcast
 
 Adcast is a personal microservices project inspired by AdTech systems, focused on slot-based ad delivery on physical screens.
 Advertisers compete to occupy playback slots, venues run live playback sessions, devices join those sessions and request the next candidates to show, and the platform coordinates wallet freezes, proof-of-play validation, and settlement across services.
@@ -96,7 +96,7 @@ sequenceDiagram
 ## Repository Layout
 
 ```text
-bidcast/
+adcast/
 ├── gateway-service/
 ├── user-service/
 ├── venue-service/

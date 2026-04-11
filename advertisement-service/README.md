@@ -1,6 +1,6 @@
 # Advertisement Service: Advertising Campaign Management
 
-The `advertisement-service` is the microservice responsible for managing advertising campaigns within the Bidcast ecosystem. In its current state, it focuses on campaign creation, persistence of the main campaign metadata, and linking each campaign to the authenticated advertiser who created it.
+The `advertisement-service` is the microservice responsible for managing advertising campaigns within the Adcast ecosystem. In its current state, it focuses on campaign creation, persistence of the main campaign metadata, and linking each campaign to the authenticated advertiser who created it.
 
 ## Tech Stack
 

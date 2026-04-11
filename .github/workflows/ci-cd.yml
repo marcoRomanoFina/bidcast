@@ -1,4 +1,4 @@
-name: Bidcast CI/CD
+name: Adcast CI/CD
 
 on:
   push:
@@ -70,7 +70,7 @@ jobs:
       - name: Build Docker Image
         run: |
           cd ${{ matrix.service }}-service
-          docker build -t bidcast/${{ matrix.service }}-service .
+          docker build -t adcast/${{ matrix.service }}-service .
 
       - name: Simulated Deploy
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'

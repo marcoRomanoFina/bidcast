@@ -16,7 +16,7 @@ import org.springframework.test.context.ActiveProfiles;
 @ActiveProfiles("test")
 @SpringBootTest(properties = {
 		"spring.task.scheduling.enabled=false",
-		"bidcast.session.presence.cleanup.enabled=false",
+		"adcast.session.presence.cleanup.enabled=false",
 		"spring.autoconfigure.exclude="
 				+ "org.springframework.boot.jdbc.autoconfigure.DataSourceAutoConfiguration,"
 				+ "org.springframework.boot.jpa.autoconfigure.HibernateJpaAutoConfiguration,"

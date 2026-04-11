@@ -1,6 +1,6 @@
 # Wallet Service: Financial Ledger and Settlement Engine
 
-The `wallet-service` is the microservice responsible for transactional accounting across the Bidcast ecosystem. It centralizes balances, frozen funds, credits, settlements, and historical auditing through a persistent ledger, maintaining financial integrity between advertisers, publishers, and the platform.
+The `wallet-service` is the microservice responsible for transactional accounting across the Adcast ecosystem. It centralizes balances, frozen funds, credits, settlements, and historical auditing through a persistent ledger, maintaining financial integrity between advertisers, publishers, and the platform.
 
 ## Service Responsibilities
 

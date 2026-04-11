@@ -1,9 +1,9 @@
 services:
   postgres:
     image: postgres:16-alpine
-    container_name: bidcast-postgres
+    container_name: adcast-postgres
     environment:
-      POSTGRES_DB: bidcast
+      POSTGRES_DB: adcast
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
     ports:
@@ -13,7 +13,7 @@ services:
 
   rabbitmq:
     image: rabbitmq:3.12-management-alpine
-    container_name: bidcast-rabbitmq
+    container_name: adcast-rabbitmq
     ports:
       - "5672:5672"
       - "15672:15672"
@@ -23,7 +23,7 @@ services:
 
   redis:
     image: redis:7-alpine
-    container_name: bidcast-redis
+    container_name: adcast-redis
     ports:
       - "6379:6379"
 
@@ -31,7 +31,7 @@ services:
     build:
       context: ./gateway-service
       dockerfile: Dockerfile
-    container_name: bidcast-gateway
+    container_name: adcast-gateway
     ports:
       - "8080:8080"
     environment:
@@ -46,12 +46,12 @@ services:
     build:
       context: ./user-service
       dockerfile: Dockerfile
-    container_name: bidcast-user
+    container_name: adcast-user
     ports:
       - "8081:8081"
     environment:
       - SPRING_PROFILES_ACTIVE=dev
-      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/bidcast
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/adcast
       - SPRING_DATASOURCE_USERNAME=${POSTGRES_USER:-postgres}
       - SPRING_DATASOURCE_PASSWORD=${POSTGRES_PASSWORD:-postgres}
       - JWT_SECRET_KEY=${JWT_SECRET_KEY}
@@ -62,12 +62,12 @@ services:
     build:
       context: ./session-service
       dockerfile: Dockerfile
-    container_name: bidcast-session
+    container_name: adcast-session
     ports:
       - "8082:8082"
     environment:
       - SPRING_PROFILES_ACTIVE=dev
-      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/bidcast
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/adcast
       - SPRING_DATASOURCE_USERNAME=${POSTGRES_USER:-postgres}
       - SPRING_DATASOURCE_PASSWORD=${POSTGRES_PASSWORD:-postgres}
       - SPRING_DATA_REDIS_HOST=redis
@@ -75,7 +75,7 @@ services:
       - SPRING_RABBITMQ_HOST=rabbitmq
       - SPRING_RABBITMQ_USERNAME=${RABBITMQ_DEFAULT_USER:-guest}
       - SPRING_RABBITMQ_PASSWORD=${RABBITMQ_DEFAULT_PASS:-guest}
-      - BIDCAST_SELECTION_SERVICE_URL=http://selection-service:8084
+      - ADCAST_SELECTION_SERVICE_URL=http://selection-service:8084
     depends_on:
       - postgres
       - redis
@@ -85,12 +85,12 @@ services:
     build:
       context: ./wallet-service
       dockerfile: Dockerfile
-    container_name: bidcast-wallet
+    container_name: adcast-wallet
     ports:
       - "8083:8083"
     environment:
       - SPRING_PROFILES_ACTIVE=dev
-      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/bidcast
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/adcast
       - SPRING_DATASOURCE_USERNAME=${POSTGRES_USER:-postgres}
       - SPRING_DATASOURCE_PASSWORD=${POSTGRES_PASSWORD:-postgres}
       - SPRING_RABBITMQ_HOST=rabbitmq
@@ -104,12 +104,12 @@ services:
     build:
       context: ./selection-service
       dockerfile: Dockerfile
-    container_name: bidcast-selection
+    container_name: adcast-selection
     ports:
       - "8084:8084"
     environment:
       - SPRING_PROFILES_ACTIVE=dev
-      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/bidcast
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/adcast
       - SPRING_DATASOURCE_USERNAME=${POSTGRES_USER:-postgres}
       - SPRING_DATASOURCE_PASSWORD=${POSTGRES_PASSWORD:-postgres}
       - SPRING_DATA_REDIS_HOST=redis
@@ -126,12 +126,12 @@ services:
     build:
       context: ./billing-service
       dockerfile: Dockerfile
-    container_name: bidcast-billing
+    container_name: adcast-billing
     ports:
       - "8086:8086"
     environment:
       - SPRING_PROFILES_ACTIVE=dev
-      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/bidcast
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/adcast
       - SPRING_DATASOURCE_USERNAME=${POSTGRES_USER:-postgres}
       - SPRING_DATASOURCE_PASSWORD=${POSTGRES_PASSWORD:-postgres}
       - SPRING_RABBITMQ_HOST=rabbitmq
@@ -147,12 +147,12 @@ services:
     build:
       context: ./venue-service
       dockerfile: Dockerfile
-    container_name: bidcast-venue
+    container_name: adcast-venue
     ports:
       - "8085:8085"
     environment:
       - SPRING_PROFILES_ACTIVE=dev
-      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/bidcast
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/adcast
       - SPRING_DATASOURCE_USERNAME=${POSTGRES_USER:-postgres}
       - SPRING_DATASOURCE_PASSWORD=${POSTGRES_PASSWORD:-postgres}
     depends_on:
