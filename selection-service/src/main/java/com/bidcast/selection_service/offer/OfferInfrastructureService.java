@@ -9,6 +9,7 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
 import java.time.Duration;
+import java.util.Map;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -36,8 +37,11 @@ public class OfferInfrastructureService {
 
     // Si una session deja de usarse, su hot state expira solo
     private static final Duration SESSION_TTL = Duration.ofMinutes(60);
+    private static final Duration SESSION_CONTEXT_TTL = Duration.ofHours(12);
+    private static final String ACTIVE_SESSIONS_KEY = "selection:active_sessions";
     private static final String ACTIVE_OFFERS_KEY = "session:%s:active_offers";
     private static final String OFFER_KEY = "session:%s:offer:%s";
+    private static final String SESSION_CONTEXT_KEY = "session:%s:context";
     private static final String DEVICE_CREATIVE_COOLDOWN_KEY = "session:%s:device:%s:creative:%s:cooldown";
 
     /*
@@ -50,8 +54,12 @@ public class OfferInfrastructureService {
         if (offerIds == null || offerIds.isEmpty()) return;
 
         redisTemplate.executePipelined((RedisCallback<Object>) connection -> {
+            byte[] activeSessionsKey = ACTIVE_SESSIONS_KEY.getBytes();
             byte[] sessionKey = activeOffersKey(sessionId).getBytes();
+            byte[] sessionContextKey = sessionContextKey(sessionId).getBytes();
+            connection.keyCommands().expire(activeSessionsKey, SESSION_CONTEXT_TTL.getSeconds());
             connection.keyCommands().expire(sessionKey, SESSION_TTL.getSeconds());
+            connection.keyCommands().expire(sessionContextKey, SESSION_CONTEXT_TTL.getSeconds());
 
             for (String offerId : offerIds) {
                 byte[] offerKey = offerKey(sessionId, offerId).getBytes();
@@ -59,6 +67,26 @@ public class OfferInfrastructureService {
             }
             return null;
         });
+    }
+
+    /**
+     * Registra metadata base de la session para que selection tenga contexto del venue
+     * aun antes de que existan offers activas.
+     */
+    public void initializeSessionContext(String sessionId, String venueId, String ownerId, String basePricePerSlot) {
+        redisTemplate.opsForHash().putAll(sessionContextKey(sessionId), Map.of(
+                "venueId", venueId,
+                "ownerId", ownerId,
+                "basePricePerSlot", basePricePerSlot
+        ));
+        redisTemplate.opsForSet().add(ACTIVE_SESSIONS_KEY, sessionId);
+        redisTemplate.expire(sessionContextKey(sessionId), SESSION_CONTEXT_TTL);
+        redisTemplate.expire(ACTIVE_SESSIONS_KEY, SESSION_CONTEXT_TTL);
+    }
+
+    public void purgeSessionContext(String sessionId) {
+        redisTemplate.delete(sessionContextKey(sessionId));
+        redisTemplate.opsForSet().remove(ACTIVE_SESSIONS_KEY, sessionId);
     }
 
     /**
@@ -230,5 +258,9 @@ public class OfferInfrastructureService {
 
     private String deviceCreativeCooldownKey(String sessionId, String deviceId, String creativeId) {
         return String.format(DEVICE_CREATIVE_COOLDOWN_KEY, sessionId, deviceId, creativeId);
+    }
+
+    private String sessionContextKey(String sessionId) {
+        return String.format(SESSION_CONTEXT_KEY, sessionId);
     }
 }

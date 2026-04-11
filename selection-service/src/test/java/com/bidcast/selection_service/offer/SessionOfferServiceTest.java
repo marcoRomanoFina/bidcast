@@ -20,12 +20,17 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import com.bidcast.selection_service.client.AdvertisementCampaignResponse;
 import com.bidcast.selection_service.client.AdvertisementClient;
 import com.bidcast.selection_service.client.AdvertisementCreativeResponse;
+import com.bidcast.selection_service.core.exception.OfferPriceBelowSessionBasePriceException;
+import com.bidcast.selection_service.session.ActiveSessionSnapshot;
+import com.bidcast.selection_service.session.ActiveSessionStatus;
+import com.bidcast.selection_service.session.SelectionSessionService;
 
 @ExtendWith(MockitoExtension.class)
 class SessionOfferServiceTest {
 
     @Mock private SessionOfferRepository sessionOfferRepository;
     @Mock private AdvertisementClient advertisementClient;
+    @Mock private SelectionSessionService selectionSessionService;
 
     @InjectMocks
     private SessionOfferService sessionBidService;
@@ -72,6 +77,13 @@ class SessionOfferServiceTest {
         );
 
         when(advertisementClient.getCampaign(campaignId)).thenReturn(campaign);
+        when(selectionSessionService.getRequiredActiveSession("session-1")).thenReturn(ActiveSessionSnapshot.builder()
+                .sessionId("session-1")
+                .venueId("venue-1")
+                .ownerId("00000000-0000-0000-0000-000000000001")
+                .basePricePerSlot(new BigDecimal("2.50"))
+                .status(ActiveSessionStatus.ACTIVE)
+                .build());
         when(sessionOfferRepository.save(org.mockito.ArgumentMatchers.any(SessionOffer.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
 
@@ -109,7 +121,27 @@ class SessionOfferServiceTest {
         );
 
         when(advertisementClient.getCampaign(campaignId)).thenReturn(campaign);
+        when(selectionSessionService.getRequiredActiveSession("session-1")).thenReturn(ActiveSessionSnapshot.builder()
+                .sessionId("session-1")
+                .venueId("venue-1")
+                .ownerId("00000000-0000-0000-0000-000000000001")
+                .basePricePerSlot(new BigDecimal("2.50"))
+                .status(ActiveSessionStatus.ACTIVE)
+                .build());
 
         assertThrows(IllegalArgumentException.class, () -> sessionBidService.create(request));
+    }
+
+    @Test
+    void create_rejectsPriceBelowSessionBasePrice() {
+        when(selectionSessionService.getRequiredActiveSession("session-1")).thenReturn(ActiveSessionSnapshot.builder()
+                .sessionId("session-1")
+                .venueId("venue-1")
+                .ownerId("adv-1")
+                .basePricePerSlot(new BigDecimal("3.00"))
+                .status(ActiveSessionStatus.ACTIVE)
+                .build());
+
+        assertThrows(OfferPriceBelowSessionBasePriceException.class, () -> sessionBidService.create(request));
     }
 }
