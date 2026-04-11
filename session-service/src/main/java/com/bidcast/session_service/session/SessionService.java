@@ -27,6 +27,7 @@ public class SessionService {
 
     @Transactional
     public Session create(CreateSessionRequest request) {
+        // Regla operativa: un venue solo puede tener una session abierta a la vez.
         if (sessionRepository.existsByVenueIdAndStatusIn(request.venueId(), OPEN_STATUSES)) {
             throw new OpenSessionAlreadyExistsException(request.venueId());
         }
@@ -46,6 +47,7 @@ public class SessionService {
         Session session = sessionRepository.findById(sessionId)
                 .orElseThrow(() -> new SessionNotFoundException(sessionId));
 
+        // El device se registra dentro de la session y pasa a READY, exista ya o no.
         SessionDevice sessionDevice = sessionDeviceRepository.findBySessionIdAndDeviceId(sessionId, deviceId)
                 .map(existingDevice -> {
                     existingDevice.markReady();
@@ -58,7 +60,8 @@ public class SessionService {
         sessionDevice.markReady();
         sessionDeviceRepository.save(sessionDevice);
 
-        if (session.isWaitingForDevice()) { // proximamente state pattern
+        // El primer device listo activa la session y recien ahi avisa a selection-service.
+        if (session.isWaitingForDevice()) {
             session.activate();
             Session persisted = sessionRepository.save(session);
 
@@ -100,6 +103,7 @@ public class SessionService {
         sessionDevice.leave();
         sessionDeviceRepository.save(sessionDevice);
 
+        // Si se fue el ultimo device listo, la session vuelve a WAITING_DEVICE.
         if (session.isActive() && sessionDeviceRepository.countBySessionIdAndStatus(sessionId, SessionDeviceStatus.READY) == 0) {
             session.waitForDevice();
             return sessionRepository.save(session);
@@ -116,6 +120,7 @@ public class SessionService {
         session.close();
         Session persisted = sessionRepository.save(session);
 
+        // El cierre se publica via outbox para no mezclar la tx de DB con RabbitMQ.
         eventPublisher.publish(new SessionClosedEvent(
                 persisted.getId().toString(),
                 persisted.getEndedAt()

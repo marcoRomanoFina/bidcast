@@ -30,6 +30,7 @@ public class SessionPresenceCleanupService {
     @Transactional
     public void cleanup() {
         Instant now = Instant.now();
+        // Primero enfriamos devices stale, despues revisamos sessions que quedaron esperando demasiado.
         markStaleDevices(now.minus(sessionPresenceProperties.getStaleAfter()));
         closeWaitingSessionsWithoutDevices(now.minus(sessionPresenceProperties.getCloseEmptyAfter()));
     }
@@ -42,6 +43,7 @@ public class SessionPresenceCleanupService {
             sessionDeviceRepository.save(staleDevice);
 
             Session session = staleDevice.getSession();
+            // Cuando no queda ningun READY, la session activa vuelve a WAITING_DEVICE.
             if (session.isActive() && sessionDeviceRepository.countBySessionIdAndStatus(session.getId(), SessionDeviceStatus.READY) == 0) {
                 session.waitForDevice();
                 sessionRepository.save(session);
@@ -58,6 +60,7 @@ public class SessionPresenceCleanupService {
                 continue;
             }
 
+            // Si nadie volvio a conectarse dentro de la ventana, cerramos por ausencia de devices.
             session.close(SessionClosedReason.NO_DEVICES);
             Session persisted = sessionRepository.save(session);
 
