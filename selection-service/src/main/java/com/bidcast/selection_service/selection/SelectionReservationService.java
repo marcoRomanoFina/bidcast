@@ -1,6 +1,5 @@
 package com.bidcast.selection_service.selection;
 
-import java.math.BigDecimal;
 import java.time.Duration;
 import java.util.Optional;
 import java.util.OptionalLong;

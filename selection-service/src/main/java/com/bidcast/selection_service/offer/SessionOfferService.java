@@ -7,6 +7,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.bidcast.selection_service.client.AdvertisementCampaignResponse;
 import com.bidcast.selection_service.client.AdvertisementClient;
+import com.bidcast.selection_service.core.exception.OfferPriceBelowSessionBasePriceException;
+import com.bidcast.selection_service.session.ActiveSessionSnapshot;
+import com.bidcast.selection_service.session.SelectionSessionService;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -21,9 +24,20 @@ public class SessionOfferService {
 
     private final SessionOfferRepository sessionOfferRepository;
     private final AdvertisementClient advertisementClient;
+    private final SelectionSessionService selectionSessionService;
 
     @Transactional
     public SessionOffer create(CreateSessionOfferRequest request) {
+        ActiveSessionSnapshot sessionSnapshot = selectionSessionService.getRequiredActiveSession(request.sessionId());
+
+        if (request.pricePerSlot().compareTo(sessionSnapshot.getBasePricePerSlot()) < 0) {
+            throw new OfferPriceBelowSessionBasePriceException(
+                    request.sessionId(),
+                    request.pricePerSlot(),
+                    sessionSnapshot.getBasePricePerSlot()
+            );
+        }
+
         // 1. Pedimos el snapshot remoto de la campaign.
         AdvertisementCampaignResponse campaign = advertisementClient.getCampaign(request.campaignId());
 

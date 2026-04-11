@@ -46,7 +46,6 @@ class GatewayRateLimiterIntegrationTest {
 
     @Container
     @ServiceConnection(name = "redis")
-    @SuppressWarnings("resource")
     static GenericContainer<?> redis = new GenericContainer<>(DockerImageName.parse("redis:7-alpine"))
             .withExposedPorts(6379);
 

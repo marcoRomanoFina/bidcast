@@ -21,6 +21,8 @@ jobs:
               - 'advertisement-service/**'
             selection:
               - 'selection-service/**'
+            session:
+              - 'session-service/**'
             billing:
               - 'billing-service/**'
             venue:
