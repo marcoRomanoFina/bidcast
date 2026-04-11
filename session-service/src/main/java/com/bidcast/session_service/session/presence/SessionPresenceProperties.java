@@ -8,7 +8,7 @@ import org.springframework.validation.annotation.Validated;
 
 import java.time.Duration;
 
-@ConfigurationProperties(prefix = "bidcast.session.presence")
+@ConfigurationProperties(prefix = "adcast.session.presence")
 @Validated
 @Getter
 @Setter

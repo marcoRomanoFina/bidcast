@@ -1,6 +1,6 @@
 # User Service: Identity Management and Access Control
 
-The `user-service` is the component responsible for identity management, authentication, and authorization within the Bidcast ecosystem. It acts as the centralized Identity Provider, managing profiles for Advertisers, Publishers, and Administrators.
+The `user-service` is the component responsible for identity management, authentication, and authorization within the Adcast ecosystem. It acts as the centralized Identity Provider, managing profiles for Advertisers, Publishers, and Administrators.
 
 ## Tech Stack
 

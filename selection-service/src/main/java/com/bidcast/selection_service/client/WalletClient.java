@@ -17,7 +17,7 @@ public class WalletClient {
 
     public WalletClient(
             RestClient restClient,
-            @Value("${bidcast.wallet-service.url:http://wallet-service:8083}") String walletServiceUrl) {
+            @Value("${adcast.wallet-service.url:http://wallet-service:8083}") String walletServiceUrl) {
         this.restClient = restClient;
         this.walletServiceUrl = walletServiceUrl;
     }

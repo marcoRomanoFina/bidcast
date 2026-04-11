@@ -20,7 +20,7 @@ public class OutboxRelay {
     private final OutboxRepository outboxRepository;
     private final OutboxWorker outboxWorker;
 
-    @Scheduled(fixedDelayString = "${bidcast.outbox.polling-delay:5000}")
+    @Scheduled(fixedDelayString = "${adcast.outbox.polling-delay:5000}")
     @Transactional
     public void scheduleDispatch() {
         List<OutboxEvent> pending = outboxRepository.findPendingBatchAndLock(PageRequest.of(0, BATCH_SIZE), MAX_ATTEMPTS);

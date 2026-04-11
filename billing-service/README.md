@@ -1,6 +1,6 @@
 # Billing Service: Payment Orchestration and External Reconciliation
 
-The `billing-service` acts as the financial gateway between Bidcast and external payment providers (currently Mercado Pago). Its primary responsibility is managing the lifecycle of balance top-ups, from the creation of the payment preference to final reconciliation via webhooks.
+The `billing-service` acts as the financial gateway between Adcast and external payment providers (currently Mercado Pago). Its primary responsibility is managing the lifecycle of balance top-ups, from the creation of the payment preference to final reconciliation via webhooks.
 
 ## Service Responsibilities
 

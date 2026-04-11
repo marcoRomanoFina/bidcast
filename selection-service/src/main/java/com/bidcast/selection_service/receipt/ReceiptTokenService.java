@@ -24,7 +24,7 @@ public class ReceiptTokenService {
     private final String secretKey;
     private static final String HMAC_ALGO = "HmacSHA256";
 
-    public ReceiptTokenService(@Value("${bidcast.selection.receipt-secret}") String secretKey) {
+    public ReceiptTokenService(@Value("${adcast.selection.receipt-secret}") String secretKey) {
         this.secretKey = secretKey;
     }
 

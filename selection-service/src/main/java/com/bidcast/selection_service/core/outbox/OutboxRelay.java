@@ -28,7 +28,7 @@ public class OutboxRelay {
      * Poller de eventos.
      * Abre una transacción por lote y bloquea las filas para que otros nodos las ignoren.
      */
-    @Scheduled(fixedDelayString = "${bidcast.outbox.polling-delay:5000}")
+    @Scheduled(fixedDelayString = "${adcast.outbox.polling-delay:5000}")
     @Transactional
     public void scheduleDispatch() {
         // 1. Buscamos y bloqueamos 50 eventos (SKIP LOCKED)

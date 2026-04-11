@@ -16,7 +16,7 @@ public class SelectionClient {
 
     public SelectionClient(
             RestClient restClient,
-            @Value("${bidcast.selection-service.url:http://selection-service:8084}") String selectionServiceUrl) {
+            @Value("${adcast.selection-service.url:http://selection-service:8084}") String selectionServiceUrl) {
         this.restClient = restClient;
         this.selectionServiceUrl = selectionServiceUrl;
     }

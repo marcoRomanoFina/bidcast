@@ -8,7 +8,7 @@
 		<version>4.0.3</version>
 		<relativePath/> <!-- lookup parent from repository -->
 	</parent>
-	<groupId>com.bidcast</groupId>
+	<groupId>com.adcast</groupId>
 	<artifactId>advertisement-service</artifactId>
 	<version>0.0.1-SNAPSHOT</version>
 	<name>advertisement-service</name>
