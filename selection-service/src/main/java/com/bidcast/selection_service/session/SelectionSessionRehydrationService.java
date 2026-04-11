@@ -19,7 +19,7 @@ public class SelectionSessionRehydrationService {
     }
 
     public void rehydrateSession(String sessionId) {
-        snapshotRepository.findBySessionIdAndStatus(sessionId, ActiveSessionStatus.ACTIVE)
+        snapshotRepository.findByStatusAndSessionId(ActiveSessionStatus.ACTIVE, sessionId)
                 .ifPresent(this::rehydrate);
     }
 

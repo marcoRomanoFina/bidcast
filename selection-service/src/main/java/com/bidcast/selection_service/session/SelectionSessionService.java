@@ -46,7 +46,7 @@ public class SelectionSessionService {
 
     @Transactional(readOnly = true)
     public ActiveSessionSnapshot getRequiredActiveSession(String sessionId) {
-        return snapshotRepository.findBySessionIdAndStatus(sessionId, ActiveSessionStatus.ACTIVE)
+        return snapshotRepository.findByStatusAndSessionId(ActiveSessionStatus.ACTIVE, sessionId)
                 .orElseThrow(() -> new SessionContextNotFoundException(sessionId));
     }
 

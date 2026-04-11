@@ -7,7 +7,7 @@ import java.util.Optional;
 
 public interface ActiveSessionSnapshotRepository extends JpaRepository<ActiveSessionSnapshot, String> {
 
-    Optional<ActiveSessionSnapshot> findBySessionIdAndStatus(String sessionId, ActiveSessionStatus status);
+    Optional<ActiveSessionSnapshot> findByStatusAndSessionId(ActiveSessionStatus status, String sessionId);
 
     List<ActiveSessionSnapshot> findByStatus(ActiveSessionStatus status);
 }

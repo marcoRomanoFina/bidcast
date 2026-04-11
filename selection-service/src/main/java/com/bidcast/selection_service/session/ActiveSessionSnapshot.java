@@ -26,7 +26,7 @@ import java.time.Instant;
 @Table(
         name = "active_session_snapshots",
         indexes = {
-                @Index(name = "idx_active_session_status", columnList = "status")
+                @Index(name = "idx_active_session_status_session_id", columnList = "status, session_id")
         }
 )
 @Getter
