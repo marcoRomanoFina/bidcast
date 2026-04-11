@@ -8,6 +8,7 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Index;
+import jakarta.persistence.OneToMany;
 import jakarta.persistence.Table;
 import jakarta.persistence.Version;
 import jakarta.validation.constraints.NotNull;
@@ -24,6 +25,8 @@ import org.hibernate.annotations.UpdateTimestamp;
 
 import java.time.Instant;
 import java.math.BigDecimal;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 
 @Entity
@@ -70,13 +73,21 @@ public class Session {
     @Column(nullable = false)
     @NotNull(message = "Session status is required")
     @Builder.Default
-    private SessionStatus status = SessionStatus.CREATED;
+    private SessionStatus status = SessionStatus.WAITING_DEVICE;
+
+    @OneToMany(mappedBy = "session", orphanRemoval = true)
+    @Builder.Default
+    private List<SessionDevice> devices = new ArrayList<>();
 
     @Column(name = "started_at")
     private Instant startedAt;
 
     @Column(name = "ended_at")
     private Instant endedAt;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "closed_reason")
+    private SessionClosedReason closedReason;
 
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
@@ -94,8 +105,8 @@ public class Session {
 
     
     public void activate() {
-        if (status != SessionStatus.CREATED) {
-            throw new IllegalStateException("Only created sessions can be activated");
+        if (status != SessionStatus.WAITING_DEVICE) {
+            throw new IllegalStateException("Only waiting sessions can be activated");
         }
         status = SessionStatus.ACTIVE;
         startedAt = Instant.now();
@@ -103,14 +114,30 @@ public class Session {
 
     
     public void close() {
+        close(SessionClosedReason.MANUAL);
+    }
+
+    public void close(SessionClosedReason reason) {
         if (status == SessionStatus.CLOSED) {
             throw new IllegalStateException("Session is already closed");
         }
         status = SessionStatus.CLOSED;
         endedAt = Instant.now();
+        closedReason = reason;
     }
 
     public boolean isActive() {
         return status == SessionStatus.ACTIVE;
+    }
+
+    public boolean isWaitingForDevice() {
+        return status == SessionStatus.WAITING_DEVICE;
+    }
+
+    public void waitForDevice() {
+        if (status != SessionStatus.ACTIVE) {
+            throw new IllegalStateException("Only active sessions can return to waiting for device");
+        }
+        status = SessionStatus.WAITING_DEVICE;
     }
 }
