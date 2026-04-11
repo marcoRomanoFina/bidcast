@@ -44,7 +44,7 @@ public class SessionPresenceCleanupService {
 
             Session session = staleDevice.getSession();
             // Cuando no queda ningun READY, la session activa vuelve a WAITING_DEVICE.
-            if (session.isActive() && sessionDeviceRepository.countBySessionIdAndStatus(session.getId(), SessionDeviceStatus.READY) == 0) {
+            if (session.isActive() && !sessionDeviceRepository.existsBySessionIdAndStatus(session.getId(), SessionDeviceStatus.READY)) {
                 session.waitForDevice();
                 sessionRepository.save(session);
                 log.info("Session {} returned to WAITING_DEVICE after last ready device became stale", session.getId());
@@ -56,7 +56,7 @@ public class SessionPresenceCleanupService {
         List<Session> waitingSessions = sessionRepository.findByStatusAndUpdatedAtBefore(SessionStatus.WAITING_DEVICE, waitingCutoff);
 
         for (Session session : waitingSessions) {
-            if (sessionDeviceRepository.countBySessionIdAndStatus(session.getId(), SessionDeviceStatus.READY) > 0) {
+            if (sessionDeviceRepository.existsBySessionIdAndStatus(session.getId(), SessionDeviceStatus.READY)) {
                 continue;
             }
 

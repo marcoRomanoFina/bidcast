@@ -265,7 +265,7 @@ class SessionServiceTest {
         when(sessionRepository.findById(sessionId)).thenReturn(Optional.of(active));
         when(sessionDeviceRepository.findBySessionIdAndDeviceId(sessionId, deviceId)).thenReturn(Optional.of(existingDevice));
         when(sessionDeviceRepository.save(any(SessionDevice.class))).thenAnswer(invocation -> invocation.getArgument(0));
-        when(sessionDeviceRepository.countBySessionIdAndStatus(sessionId, SessionDeviceStatus.READY)).thenReturn(1L);
+        when(sessionDeviceRepository.existsBySessionIdAndStatus(sessionId, SessionDeviceStatus.READY)).thenReturn(true);
 
         Session returnedSession = sessionService.leave(sessionId, deviceId);
 
@@ -297,7 +297,7 @@ class SessionServiceTest {
         when(sessionRepository.findById(sessionId)).thenReturn(Optional.of(active));
         when(sessionDeviceRepository.findBySessionIdAndDeviceId(sessionId, deviceId)).thenReturn(Optional.of(existingDevice));
         when(sessionDeviceRepository.save(any(SessionDevice.class))).thenAnswer(invocation -> invocation.getArgument(0));
-        when(sessionDeviceRepository.countBySessionIdAndStatus(sessionId, SessionDeviceStatus.READY)).thenReturn(0L);
+        when(sessionDeviceRepository.existsBySessionIdAndStatus(sessionId, SessionDeviceStatus.READY)).thenReturn(false);
         when(sessionRepository.save(any(Session.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         Session returnedSession = sessionService.leave(sessionId, deviceId);

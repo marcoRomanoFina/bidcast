@@ -34,7 +34,7 @@ import java.util.UUID;
     name = "sessions",
     indexes = {
         @Index(name = "idx_session_venue_status", columnList = "venue_id, status"),
-        @Index(name = "idx_session_owner_status", columnList = "owner_id, status")
+        @Index(name = "idx_session_status_updated_at", columnList = "status, updated_at")
     }
 )
 @Getter

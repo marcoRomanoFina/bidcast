@@ -32,7 +32,8 @@ import java.util.UUID;
                 @UniqueConstraint(name = "uk_session_device", columnNames = {"session_id", "device_id"})
         },
         indexes = {
-                @Index(name = "idx_session_device_lookup", columnList = "session_id, device_id")
+                @Index(name = "idx_session_device_lookup", columnList = "session_id, device_id"),
+                @Index(name = "idx_session_device_session_status", columnList = "session_id, status")
         }
 )
 @Getter

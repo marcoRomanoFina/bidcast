@@ -73,7 +73,7 @@ class SessionPresenceCleanupServiceTest {
                 .build();
 
         when(sessionDeviceRepository.findByStatusAndLastSeenAtBefore(any(), any())).thenReturn(List.of(staleDevice));
-        when(sessionDeviceRepository.countBySessionIdAndStatus(session.getId(), SessionDeviceStatus.READY)).thenReturn(0L);
+        when(sessionDeviceRepository.existsBySessionIdAndStatus(session.getId(), SessionDeviceStatus.READY)).thenReturn(false);
         when(sessionRepository.findByStatusAndUpdatedAtBefore(any(), any())).thenReturn(List.of());
 
         sessionPresenceCleanupService.cleanup();
@@ -106,7 +106,7 @@ class SessionPresenceCleanupServiceTest {
 
         when(sessionDeviceRepository.findByStatusAndLastSeenAtBefore(any(), any())).thenReturn(List.of());
         when(sessionRepository.findByStatusAndUpdatedAtBefore(eq(SessionStatus.WAITING_DEVICE), any())).thenReturn(List.of(waitingSession));
-        when(sessionDeviceRepository.countBySessionIdAndStatus(waitingSession.getId(), SessionDeviceStatus.READY)).thenReturn(0L);
+        when(sessionDeviceRepository.existsBySessionIdAndStatus(waitingSession.getId(), SessionDeviceStatus.READY)).thenReturn(false);
         when(sessionRepository.save(any(Session.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         sessionPresenceCleanupService.cleanup();

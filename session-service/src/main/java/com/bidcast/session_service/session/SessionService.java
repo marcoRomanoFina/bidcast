@@ -104,7 +104,7 @@ public class SessionService {
         sessionDeviceRepository.save(sessionDevice);
 
         // Si se fue el ultimo device listo, la session vuelve a WAITING_DEVICE.
-        if (session.isActive() && sessionDeviceRepository.countBySessionIdAndStatus(sessionId, SessionDeviceStatus.READY) == 0) {
+        if (session.isActive() && !sessionDeviceRepository.existsBySessionIdAndStatus(sessionId, SessionDeviceStatus.READY)) {
             session.waitForDevice();
             return sessionRepository.save(session);
         }

@@ -11,7 +11,7 @@ public interface SessionDeviceRepository extends JpaRepository<SessionDevice, UU
 
     Optional<SessionDevice> findBySessionIdAndDeviceId(UUID sessionId, UUID deviceId);
 
-    long countBySessionIdAndStatus(UUID sessionId, SessionDeviceStatus status);
+    boolean existsBySessionIdAndStatus(UUID sessionId, SessionDeviceStatus status);
 
     List<SessionDevice> findByStatusAndLastSeenAtBefore(SessionDeviceStatus status, Instant cutoff);
 }
