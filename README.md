@@ -1,7 +1,7 @@
 # Bidcast
 
-Bidcast is a personal microservices project inspired by AdTech systems, focused on slot-based ad delivery on physical screens rather than classic impression-by-impression RTB.
-Advertisers compete to occupy playback slots, devices request the next candidates to show, and the platform coordinates wallet freezes, proof-of-play validation, and settlement across services.
+Adcast is a personal microservices project inspired by AdTech systems, focused on slot-based ad delivery on physical screens.
+Advertisers compete to occupy playback slots, venues run live playback sessions, devices join those sessions and request the next candidates to show, and the platform coordinates wallet freezes, proof-of-play validation, and settlement across services.
 
 The project is intentionally backend- and infrastructure-heavy. The goal is to practice concurrency, idempotency, distributed state, payments, asynchronous messaging, and recovery patterns in a realistic multi-service environment.
 
@@ -21,7 +21,7 @@ The project is intentionally backend- and infrastructure-heavy. The goal is to p
 
 ## Architecture
 
-Bidcast follows a service-oriented architecture with a separation between identity, routing, inventory, campaign management, selection, wallet accounting, and billing.
+Adcast follows a service-oriented architecture with a separation between identity, routing, venue inventory, runtime session lifecycle, campaign management, playback selection, wallet accounting, and billing.
 
 - PostgreSQL is used where auditability and transactional guarantees matter.
 - Redis is used for hot-path state, cooldowns, locks, and fast operational reads.
@@ -34,33 +34,40 @@ Services currently present in the repository:
 - `gateway-service`: API gateway, JWT validation, RBAC, header normalization, rate limiting, CORS
 - `user-service`: registration, login, password hashing, JWT issuance
 - `venue-service`: venue and device inventory
+- `session-service`: venue session lifecycle, device presence, heartbeat tracking, idle-session cleanup, session closure events
 - `advertisement-service`: campaign and creative management
 - `selection-service`: session offers, candidate selection, proof-of-play validation, Redis hot state, outbox-driven settlement orchestration
 - `wallet-service`: internal ledger, credits, debits, frozen balance handling, settlement consumption
 - `billing-service`: Mercado Pago checkout preference creation and webhook reconciliation
 
-## Current Selection Model
+## Current Runtime Model
 
-The core delivery flow currently lives in `selection-service`:
+The current playback runtime is split between `session-service` and `selection-service`:
 
-- advertisers register a `SessionOffer` for a session
+- a publisher creates a venue session in `WAITING_DEVICE`
+- the first device that becomes ready activates the session
+- `session-service` notifies `selection-service` when the session becomes active
+- advertisers register a `SessionOffer` for that session
 - each offer has a `pricePerSlot`, total budget, cooldown configuration, and a list of creative snapshots
 - the service returns the next `N` candidates for a device
 - each candidate already includes a concrete creative, slot duration, and a signed receipt
 - local `device + creative` cooldown is reserved when the candidate is returned
-- `Proof of Play` confirms actual playback, charges the real total (`pricePerSlot * slotCount`), and updates global campaign recency
+- `Proof of Play` confirms actual playback, consumes the real total (`pricePerSlot * slotCount`), and updates global campaign recency
+- if devices disappear, `session-service` moves the session back to `WAITING_DEVICE` and can close it automatically after an idle timeout
 
-This is closer to continuous playback selection than to classic web RTB.
-
-### Selection / Settlement Flow
+### Session / Selection / Settlement Flow
 
 ```mermaid
 sequenceDiagram
     participant D as Device
+    participant SS as Session Service
     participant S as Selection Service
     participant W as Wallet Service
     participant R as RabbitMQ
 
+    D->>SS: ready
+    SS->>SS: Activate session on first ready device
+    SS->>S: Register active session
     D->>S: Request next N candidates
     S->>W: Freeze offer budget
     W-->>S: Freeze accepted
@@ -71,21 +78,6 @@ sequenceDiagram
     S->>R: Publish settlement event (outbox)
     R-->>W: Consume settlement against frozen balance
 ```
-
-## Reliability Patterns
-
-The project includes several patterns commonly used in distributed systems:
-
-- multi-layer idempotency for `PoP`
-- signed receipt validation before charging playback
-- Redis hot state plus DB-backed rehydration
-- Redisson lock per session for concurrent selection
-- transactional outbox for durable event publication
-- settlement reconciliation against persisted `ProofOfPlay`
-- gateway-side identity shielding using trusted internal headers
-- Redis-backed distributed rate limiting
-
-Some of these go beyond what a minimal MVP would need, but they are included deliberately to explore real trade-offs around consistency, retries, and operational safety.
 
 ## Tech Stack
 
@@ -108,6 +100,7 @@ bidcast/
 ├── gateway-service/
 ├── user-service/
 ├── venue-service/
+├── session-service/
 ├── advertisement-service/
 ├── selection-service/
 ├── wallet-service/
@@ -127,6 +120,7 @@ The root [`docker-compose.yml`](docker-compose.yml) currently starts:
 - RabbitMQ
 - `gateway-service`
 - `user-service`
+- `session-service`
 - `wallet-service`
 - `selection-service`
 - `billing-service`
@@ -140,7 +134,7 @@ docker compose up --build
 
 Some services in the repository, such as `advertisement-service`, may be developed and tested independently even if they are not currently included in the default compose startup.
 
-Check the corresponding service `README` files for environment variables and endpoint details.
+Check the corresponding service `README` files for environment variables, lifecycle details, and endpoint contracts.
 
 ## Testing
 
